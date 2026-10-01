@@ -815,3 +815,60 @@
 .app-shell[data-theme="dark"] .deal-all-row input{background:#17231b;color:#e5eee6;border-color:#46574a;}
 .app-shell[data-theme="dark"] .chat-reactions button{background:#1b2b21;border-color:#415045;color:#d6e2d7;}
 @media(max-width:700px){.app-shell .table-actions-menu button{min-height:44px;}.app-shell .modal-close{width:44px;height:44px;}}
+
+/* Screenshot-specific control sizing and icon alignment. */
+.app-shell .table-heading{top:16px;}
+.app-shell .table-heading .more-button{width:42px;height:38px;min-width:42px;min-height:38px;padding:0;display:grid;place-items:center;line-height:1;}
+.app-shell .table-heading .more-button span{display:block;font-size:18px;line-height:1;letter-spacing:3px;transform:translateY(-1px);}
+.app-shell .deck-menu-toggle{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:9px 12px;line-height:1.2;}
+.app-shell .deck-chevron{width:8px;height:8px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .16s ease;}
+.app-shell .deck-chevron.is-open{transform:rotate(135deg);}
+.app-shell .reaction-picker-trigger{display:inline-grid;place-items:center;padding:0;line-height:1;vertical-align:middle;}
+.app-shell .reaction-picker-trigger span{display:block;font-family:Arial,sans-serif;font-size:16px;line-height:1;transform:translateY(-1px);}
+.reaction-picker .reaction-other{display:grid;place-items:center;padding:0;line-height:1;color:#52695a;}
+.reaction-picker .reaction-other span{display:block;font-size:22px;line-height:1;letter-spacing:1px;transform:translateY(-3px);}
+.reaction-picker.theme-dark .reaction-other{color:#e2eee3;}
+.reaction-picker.theme-dark .reaction-other:hover{background:#2c3d31;}
+.app-shell .playing-card.card-back .back-pattern,.app-shell .mini-deck{background:radial-gradient(circle at 50% 46%,#397258 0 2px,transparent 2.5px),radial-gradient(circle at 50% 50%,#285840 0 38%,#1d4936 72%);border:1px solid #a8c1a9;box-shadow:inset 0 0 0 3px #1d4936,inset 0 0 0 4px #73977a;color:#e2eadc;text-shadow:0 1px 3px #102d20;}
+.app-shell .mini-deck{display:grid;place-items:center;padding:0;border-radius:4px;line-height:1;}
+.app-shell .settings-trigger{display:grid;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0;line-height:1;}
+.app-shell .toolbar-actions .tool-secondary>span,.app-shell .profile-popover>button[role="menuitem"]::first-letter{display:inline-grid;place-items:center;min-width:20px;line-height:1;}
+.app-shell .table-actions-menu button,.app-shell .profile-popover>button[role="menuitem"]{display:flex;align-items:center;gap:9px;padding:10px 12px;}
+.app-shell .role-manager{margin-top:12px;padding-top:12px;border-top:1px solid #e5eae2;}
+.app-shell .role-manager>p{margin:4px 0 9px;color:#829085;font-size:10px;line-height:1.4;}
+.app-shell .settings-section-label{margin:13px 0 6px;color:#829085;font-size:9px;font-weight:800;letter-spacing:1.1px;}
+.app-shell .role-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #ebeee8;}
+.app-shell .role-row>span b,.app-shell .role-row>span small{display:block;}
+.app-shell .role-row>span b{font-size:11px;color:#3c5746;}
+.app-shell .role-row>span small{margin-top:2px;color:#87958b;font-size:9px;}
+.app-shell .role-row>button{min-height:34px;padding:6px 8px;border:1px solid #dfe5db;border-radius:7px;background:#f7f9f4;color:#405c49;font-size:9px;font-weight:700;white-space:nowrap;}
+.app-shell .role-row>button.role-transfer{background:transparent;}
+.app-shell .role-confirm{grid-column:1/-1;display:flex;align-items:center;gap:6px;padding:7px;border-radius:7px;background:#f3f1e8;color:#596a5e;font-size:10px;}
+.app-shell .role-confirm span{flex:1;}
+.app-shell .role-confirm button{min-height:32px;padding:6px 9px;border:0;border-radius:6px;background:#dfe9dc;color:#365640;font-size:9px;font-weight:700;}
+.app-shell[data-theme="dark"] .role-manager{border-color:#3a4b3e;}
+.app-shell[data-theme="dark"] .role-row{border-color:#35453a;}
+.app-shell[data-theme="dark"] .role-row>span b{color:#dce9dd;}
+.app-shell[data-theme="dark"] .role-row>span small,.app-shell[data-theme="dark"] .role-manager>p,.app-shell[data-theme="dark"] .settings-section-label{color:#aebdaf;}
+.app-shell[data-theme="dark"] .role-row>button{border-color:#46574a;background:#26382d;color:#dce9dd;}
+.app-shell[data-theme="dark"] .role-row>button.role-transfer{background:transparent;}
+.app-shell[data-theme="dark"] .role-confirm{background:#27372c;color:#dce9dd;}
+.app-shell[data-theme="dark"] .role-confirm button{background:#385b41;color:#fff;}
+.app-shell[data-theme="dark"] .reaction-picker.theme-dark button{color:#e2eee3;}
+.app-shell[data-theme="dark"] .reaction-picker.theme-dark .reaction-other{color:#e2eee3;}
+.app-shell[data-theme="dark"] .settings-trigger{color:#e3efe3;background:#ffffff13;border:1px solid #ffffff28;}
+.app-shell[data-theme="dark"] .settings-trigger:hover{background:#ffffff20;}
+.app-shell .top-actions .settings-trigger{display:grid;}
+@keyframes shuffle-deck-cascade{
+  0%,100%{transform:translate(calc(var(--fan,0)*2px),calc(var(--fan,0)*-1px)) rotate(calc((var(--fan,0) - 1)*1deg));filter:none;}
+  18%{transform:translate(calc(var(--fan,0)*2px - 12px),-20px) rotate(-13deg);filter:brightness(1.18);}
+  37%{transform:translate(calc(var(--fan,0)*2px + 17px),6px) rotate(12deg);filter:brightness(1.08);}
+  57%{transform:translate(calc(var(--fan,0)*2px - 10px),-14px) rotate(-9deg);}
+  77%{transform:translate(calc(var(--fan,0)*2px + 7px),2px) rotate(6deg);}
+}
+.app-shell .pile-zone.action-shuffle[data-place-id="deck"] .pile-cards .playing-card{animation:shuffle-deck-cascade .78s cubic-bezier(.35,.05,.25,1) both;animation-delay:calc(var(--fan,0)*45ms);will-change:transform,filter;}
+.app-shell .pile-zone.action-shuffle[data-place-id="deck"] .pile-cards{animation:shuffle-cue .85s ease-in-out;}
+@media(max-width:700px){.app-shell .table-heading .more-button{width:40px;height:38px;min-width:40px;min-height:38px;}.app-shell .settings-trigger{width:36px;height:36px;min-width:36px;min-height:36px;}.app-shell .role-row{grid-template-columns:minmax(0,1fr) auto;}.app-shell .role-row>button.role-transfer{grid-column:2;}}
+@media(max-width:700px){.app-shell .table-heading{top:8px;}}
+@media(max-width:700px) and (max-height:500px){.app-shell .table-heading{top:5px;}}
+@media(prefers-reduced-motion:reduce){.app-shell .deck-chevron,.app-shell .pile-zone.action-shuffle .pile-cards .playing-card{transition:none;animation-duration:.01ms!important;}}

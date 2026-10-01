@@ -45,8 +45,11 @@ export function applyTableAction(room, playerId, payload = {}) {
   if (!room?.players.has(playerId)) return reject('Join a table first.');
   const { type } = payload;
   const isHost = room.hostId === playerId;
-  const mayMoveCards = !room.settings.hostControls || isHost;
-  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile'].includes(type) && !mayMoveCards) return reject('Only the host can move cards at this table.');
+  room.cohostIds ||= new Set();
+  const isCohost = room.cohostIds.has(playerId);
+  const isModerator = isHost || isCohost;
+  const mayMoveCards = !room.settings.hostControls || isModerator;
+  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile', 'host:assign'].includes(type) && !mayMoveCards) return reject('Only the host or a cohost can move cards at this table.');
 
   if (type === 'undo') {
     const previous = room.undoStack?.pop();
@@ -55,8 +58,8 @@ export function applyTableAction(room, playerId, payload = {}) {
     if(previous.settings)room.settings = previous.settings;
     return { ok: true };
   }
-  if (type === 'reset-board' && !isHost) return reject('Only the host can reset the board.');
-  const undoState = ['chat', 'chat:react', 'profile', 'settings'].includes(type) ? null : { piles: structuredClone(room.piles) };
+  if (type === 'reset-board' && !isModerator) return reject('Only the host or a cohost can reset the board.');
+  const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign'].includes(type) ? null : { piles: structuredClone(room.piles) };
 
   if (type === 'shuffle') {
     const pile = findPile(room, payload.pileId || 'deck'); if (!pile) return reject();
@@ -260,8 +263,21 @@ export function applyTableAction(room, playerId, payload = {}) {
     const pile = findPile(room, payload.pileId);
     if (!pile || pile.kind === 'hand' || !Number.isFinite(Number(payload.x)) || !Number.isFinite(Number(payload.y))) return reject('Choose a movable pile and a table position.');
     pile.x = Math.min(94, Math.max(6, Number(payload.x))); pile.y = Math.min(78, Math.max(18, Number(payload.y)));
+  } else if (type === 'host:assign') {
+    if (!isHost) return reject('Only the primary host can assign host roles.');
+    const target=room.players.get(payload.targetId);
+    if(!target)return reject('Choose a player at this table.');
+    if(payload.role==='cohost'){
+      if(target.id===room.hostId)return reject('The primary host cannot be a cohost.');
+      if(room.cohostIds.has(target.id))room.cohostIds.delete(target.id);else room.cohostIds.add(target.id);
+    }else if(payload.role==='host'){
+      if(target.id===room.hostId)return reject('That player is already the host.');
+      room.cohostIds.add(room.hostId);
+      room.cohostIds.delete(target.id);
+      room.hostId=target.id;
+    }else return reject('Choose a valid host role.');
   } else if (type === 'settings') {
-    if (!isHost) return reject('Only the host can change table settings.');
+    if (!isModerator) return reject('Only the host or a cohost can change table settings.');
     room.settings = { ...room.settings, ...payload.settings };
   } else if (type === 'profile') {
     const player = room.players.get(playerId);

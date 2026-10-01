@@ -62,7 +62,7 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     <div ref={toolbarRef} className={`toolbar ${dragging?'is-dragging':''}`} style={offsetStyle}>
       <button className="toolbar-drag-handle" aria-label="Move deck controls" title="Drag to move deck controls" onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} onPointerCancel={onGripUp}>⠿</button>
       <div className="deck-status"><span className="mini-deck">♧</span><div><b>{deckCount}</b><small>in deck</small></div></div>
-      {canPlay&&<button className="deck-menu-toggle" aria-expanded={deckOpen} onClick={()=>setDeckOpen(!deckOpen)}>{deckOpen?'Deck actions ⌃':'Deck actions ⌄'}</button>}
+      {canPlay&&<button className="deck-menu-toggle" aria-expanded={deckOpen} onClick={()=>setDeckOpen(!deckOpen)}><span>Deck actions</span><i className={`deck-chevron ${deckOpen?'is-open':''}`} aria-hidden="true"/></button>}
       {canPlay&&deckOpen&&<div className="toolbar-actions">
         <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('shuffle',{pileId:'deck'})}><span>⟳</span><label>Shuffle</label></button>
         <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('deal',{count:1})}><span>♧</span><label>Deal one</label></button>

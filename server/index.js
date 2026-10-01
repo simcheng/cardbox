@@ -71,6 +71,7 @@ function ledgerEntry(room, playerId, payload, before) {
   else if (type === 'pile:split-top-fan') { const items=pileItems(priorPile);description = 'Separated the top fan from a stack';details={count:priorPile?.fanGroups?.at(-1)?.length||0,layout:'fan',cards:items.map(item=>item.label),cardItems:items}; }
   else if (type === 'pile:move') { const items=pileItems(priorPile);description = `Moved ${pileName(priorPile)}`; details = { count: priorPile?.cards.length || 0, position: { x: payload.x, y: payload.y },cards:items.map(item=>item.label),cardItems:items }; }
   else if (type === 'pile:create') description = `Created ${payload.name || 'a shared pile'}`;
+  else if (type === 'host:assign') { const target=room.players.get(payload.targetId),wasCohost=before.cohostIds?.includes(payload.targetId); description=payload.role==='host'?`Transferred host to ${target?.name||'a player'}`:`${wasCohost?'Removed':'Assigned'} ${target?.name||'a player'} ${wasCohost?'from cohost':'as cohost'}`;details={targetId:payload.targetId,targetName:target?.name,role:payload.role}; }
   else if (type === 'pile:rename') { description = `Renamed ${pileName(priorPile)} to ${payload.name}`; details = { pileId: priorPile?.id, previousName: priorPile?.name, name: payload.name }; }
   else if (type === 'pile:delete') description = `Deleted an empty ${pileName(priorPile)}`;
   else if (type === 'reset-board') { const beforeCards=before.piles.flatMap(p=>p.cards.map(card=>({label:cardName(card),privateToPlayerId:p.kind==='hand'&&room.settings.privateHands?p.ownerId:!card.faceUp?'__private__':null})));description = 'Reset the board and shuffled a fresh deck'; details = { count: room.piles.find(p=>p.id==='deck')?.cards.length || 0, cards:beforeCards.map(item=>item.label),cardItems:beforeCards,sourcePiles:before.piles.map(p=>({name:p.name||p.id,count:p.cards.length})) }; }
@@ -109,7 +110,7 @@ io.on('connection', (socket) => {
   socket.on('table:action', (payload, done = () => {}) => {
     const room = getRoom(socket.data.roomId); const playerId = socket.data.playerId;
     if (!room || !room.players.has(playerId)) return done({ ok: false, error: 'Join a table first.' });
-    const before = { piles: structuredClone(room.piles), settings: structuredClone(room.settings) };
+    const before = { piles: structuredClone(room.piles), settings: structuredClone(room.settings), cohostIds:[...(room.cohostIds||[])] };
     const result = applyTableAction(room, playerId, payload);
     if (!result.ok) return done(result);
     room.ledger.push(ledgerEntry(room, playerId, payload, before));

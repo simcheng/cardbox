@@ -19,9 +19,10 @@ function uniqueName(room, requested, excludeId = '') {
 function publicRoom(room, viewerId) {
   const settings = room.settings;
   return {
-    id: room.id, name: room.name, hostId: room.hostId, settings, canUndo: room.undoStack?.length > 0,
+    id: room.id, name: room.name, hostId: room.hostId, cohostIds:[...(room.cohostIds||[])], settings, canUndo: room.undoStack?.length > 0,
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, emoji: p.emoji || '', online: p.online,
+      role:p.id===room.hostId?'host':room.cohostIds?.has(p.id)?'cohost':'player',
       handCount: room.piles.find((pile) => pile.kind === 'hand' && pile.ownerId === p.id)?.cards.length || 0,
     })),
     piles: room.piles.map((pile) => ({ ...pile, cards: pile.cards.map((card) => {
@@ -49,7 +50,7 @@ export function createRoom(name, playerName, settings = {}) {
   const deckDefinition = getDeck(settings.deckId);
   const player = { id: randomUUID(), name: playerName.slice(0, 24), color: colors[0], emoji: animals[0], online: true };
   const room = {
-    id, name: (name || 'A new table').slice(0, 36), hostId: player.id,
+    id, name: (name || 'A new table').slice(0, 36), hostId: player.id, cohostIds:new Set(),
     settings: { privateHands: true, hostControls: false, ...settings, deckId: deckDefinition.id },
     players: new Map([[player.id, player]]),
     piles: [
