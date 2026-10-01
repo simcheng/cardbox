@@ -65,7 +65,6 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
       {canPlay&&<button className="deck-menu-toggle" aria-expanded={deckOpen} onClick={()=>setDeckOpen(!deckOpen)}>{deckOpen?'Deck actions ⌃':'Deck actions ⌄'}</button>}
       {canPlay&&deckOpen&&<div className="toolbar-actions">
         <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('shuffle',{pileId:'deck'})}><span>⟳</span><label>Shuffle</label></button>
-        <button className="tool-secondary cut-tool" disabled={!deckCount} onClick={()=>onAction('cut',{pileId:'deck'})}><span>⌁</span><label>Cut</label></button>
         <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('deal',{count:1})}><span>♧</span><label>Deal one</label></button>
         <div className="tool-dropdown">
           <button ref={moreRef} className="tool-more" aria-expanded={open} aria-label="More card actions" onClick={toggleMore}>•••</button>

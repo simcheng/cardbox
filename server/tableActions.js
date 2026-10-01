@@ -61,9 +61,6 @@ export function applyTableAction(room, playerId, payload = {}) {
   if (type === 'shuffle') {
     const pile = findPile(room, payload.pileId || 'deck'); if (!pile) return reject();
     pile.cards = shuffle(pile.cards);
-  } else if (type === 'cut') {
-    const pile = findPile(room, payload.pileId || 'deck'); if (!pile || pile.cards.length < 2) return reject('There are not enough cards to cut.');
-    const midpoint = Math.floor(pile.cards.length / 2); pile.cards = [...pile.cards.slice(midpoint), ...pile.cards.slice(0, midpoint)];
   } else if (type === 'draw' || type === 'deal') {
     const deck = findPile(room, payload.pileId || 'deck'); if (!deck?.cards.length) return reject('The deck is empty.');
     const count = type === 'deal' ? Math.min(Math.max(Number(payload.count) || 1, 1), 13) : 1;
@@ -255,6 +252,10 @@ export function applyTableAction(room, playerId, payload = {}) {
   } else if (type === 'pile:create') {
     const index = room.piles.filter((pile) => pile.kind === 'shared').length;
     room.piles.push({ id: `pile-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name: (payload.name || `Pile ${index}`).slice(0,24), kind: 'shared', x: 30 + (index % 5) * 10, y: 47 + (index % 2) * 12, cards: [] });
+  } else if (type === 'pile:rename') {
+    const pile=findPile(room,payload.pileId),name=String(payload.name||'').trim().slice(0,24);
+    if(!pile||pile.kind!=='shared'||!name)return reject('Choose a valid name for this pile.');
+    pile.name=name;
   } else if (type === 'pile:move') {
     const pile = findPile(room, payload.pileId);
     if (!pile || pile.kind === 'hand' || !Number.isFinite(Number(payload.x)) || !Number.isFinite(Number(payload.y))) return reject('Choose a movable pile and a table position.');

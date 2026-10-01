@@ -7,7 +7,7 @@ export default function TableSurface({
   onPilePointerDown, onPilePointerMove, onPilePointerUp, onPilePointerCancel,
   onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardPointerCancel,
   onOpenContextMenu, dragCardId, dragPosition, dragOverHand, contextCardId, cue,
-  onConfirmPlacement, onCancelPlacement, pendingPlacement, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel,
+  onConfirmPlacement, onCancelPlacement, pendingPlacement, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel, draggedCardIds = [],
 }) {
   const [drawFlight,setDrawFlight]=useState(null);
   const [surfaceSize,setSurfaceSize]=useState({width:0,height:0});
@@ -70,30 +70,40 @@ export default function TableSurface({
     {room.piles.filter((pile)=>pile.kind!=='hand').map((pile)=>{
       const isFan=pile.kind==='tableau'&&['fan','fan-stack'].includes(pile.layout);
       const groupIds=isFan?(pile.layout==='fan-stack'?(pile.fanGroups?.length?pile.fanGroups:[pile.cards.map(card=>card.id)]):[pile.cards.map(card=>card.id)]):[];
-      const groupByCard=isFan?new Map():null;
-      if(isFan)for(let group=0;group<groupIds.length;group++){
-        const ids=groupIds[group];
-        for(let index=0;index<ids.length;index++)groupByCard.set(ids[index],{group,index,count:ids.length});
-      }
       const longestFan=groupIds.reduce((max,ids)=>Math.max(max,ids.length),0);
       const surfaceWidth=surfaceSize.width;
       const surfaceHeight=surfaceSize.height;
       const usableWidth=Math.max(140,surfaceWidth-24);
-      const fanStep=Math.min(5,Math.max(1,(usableWidth-67)/Math.max(1,longestFan-1)));
-      const groupStep=Math.min(12,Math.max(0,(usableWidth-(67+fanStep*Math.max(0,longestFan-1)))/Math.max(1,groupIds.length-1)));
+      const isHandFan=pile.layout==='fan';
+      const fanColumns=isHandFan?Math.min(longestFan,Math.max(1,Math.floor((usableWidth-67)/24)+1)):longestFan;
+      const fanRows=isHandFan?Math.ceil(pile.cards.length/Math.max(1,fanColumns)):1;
+      const rowStep=29;
+      const fanStep=isHandFan?Math.min(24,Math.max(0,(usableWidth-67)/Math.max(1,fanColumns-1))):Math.min(5,Math.max(1,(usableWidth-67)/Math.max(1,longestFan-1)));
+      const groupStep=isHandFan?0:Math.min(12,Math.max(0,(usableWidth-(67+fanStep*Math.max(0,longestFan-1)))/Math.max(1,groupIds.length-1)));
       const groupYStep=Math.min(5,Math.max(0,(surfaceHeight-138)/Math.max(1,groupIds.length-1)));
-      const fanWidth=Math.max(74,67+fanStep*Math.max(0,longestFan-1)+Math.max(0,groupIds.length-1)*groupStep);
+      const fanWidth=Math.max(74,67+fanStep*Math.max(0,fanColumns-1)+Math.max(0,groupIds.length-1)*groupStep);
+      const fanHeight=102+Math.max(0,fanRows-1)*rowStep;
+      const groupByCard=isFan?new Map():null;
+      if(isHandFan){
+        for(let index=0;index<pile.cards.length;index++){
+          const row=Math.floor(index/fanColumns),column=index%fanColumns,count=Math.min(fanColumns,pile.cards.length-row*fanColumns);
+          groupByCard.set(pile.cards[index].id,{group:0,row,index:column,count,z:row*100+column});
+        }
+      }else if(isFan)for(let group=0;group<groupIds.length;group++){
+        const ids=groupIds[group];
+        for(let index=0;index<ids.length;index++)groupByCard.set(ids[index],{group,index,row:0,count:ids.length,z:group*100+index});
+      }
       const draggedX=pileDrag?.pileId===pile.id?pileDrag.x:pile.x;
       const pileX=isFan&&surfaceWidth>0?Math.min(100-(fanWidth/2+8)/surfaceWidth*100,Math.max((fanWidth/2+8)/surfaceWidth*100,draggedX)):draggedX;
       const draggedY=pileDrag?.pileId===pile.id?pileDrag.y:pile.y;
-      const fanTopMargin=(76+Math.max(0,groupIds.length-1)*groupYStep)/Math.max(1,surfaceHeight)*100;
-      const fanBottomMargin=69/Math.max(1,surfaceHeight)*100;
+      const fanTopMargin=(55+(isHandFan?0:Math.max(0,groupIds.length-1)*groupYStep))/Math.max(1,surfaceHeight)*100;
+      const fanBottomMargin=(96+Math.max(0,fanRows-1)*rowStep)/Math.max(1,surfaceHeight)*100;
       const pileY=isFan&&surfaceHeight>0?Math.min(100-fanBottomMargin,Math.max(fanTopMargin,draggedY)):draggedY;
       const cardsToShow=isFan?pile.cards:pile.cards.slice(pile.kind==='tableau'?-8:-3);
-      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.toId===pile.id?`action-${cueClass}`:''}`} style={{left:`${pileX}%`,top:`${pileY}%`}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
-      <div className="pile-cards" style={isFan?{width:`${fanWidth}px`}:undefined}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard.get(card.id)||{group:0,index,count:cardsToShow.length};const fanStyle=isFan?{'--fan':meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.group*100+meta.index}:undefined;return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={dragCardId===card.id} actionCue={cue?.cardId===card.id} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
-      {pile.kind==='tableau'&&pile.cards.length>0&&<span className="stack-count" aria-label={`${pile.cards.length} cards in stack`}>{pile.cards.length}</span>}
-      {pile.kind!=='tableau'&&<span className="pile-label">{pile.name}<small>{pile.cards.length} {pile.cards.length===1?'card':'cards'}</small></span>}
+      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.toId===pile.id?`action-${cueClass}`:''}`} style={{left:`${pileX}%`,top:`${pileY}%`,'--fan-width':`${fanWidth}px`}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
+      <div className="pile-cards" style={isFan?{width:`${fanWidth}px`,height:`${fanHeight}px`}:undefined}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard?.get(card.id)||{group:0,index,row:0,count:cardsToShow.length,z:index};const fanStyle=isFan?{'--fan':meta.index,'--fan-row':meta.row,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-row-step':`${rowStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.z}:undefined;return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggedCardIds.includes(card.id)} actionCue={cue?.cardId===card.id} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
+      {pile.kind==='tableau'&&pile.cards.length>1&&<span className="stack-count" style={{top:'31px',left:'calc(50% + 12px)',right:'auto',bottom:'auto',transform:'none'}} aria-label={`${pile.cards.length} cards in stack`}>{pile.cards.length}</span>}
+      {pile.kind!=='tableau'&&<span className="pile-label">{pile.name}{pile.cards.length>1&&<small>{pile.cards.length} cards</small>}</span>}
       <button className={`pile-grab ${pile.kind==='tableau'?'tableau-grab':''}`} aria-label={`Move ${pile.name||'card stack'}`} title="Drag to move" onClick={(event)=>event.stopPropagation()}>⠿</button>
       <button className="pile-menu-button" aria-label={`Actions for ${pile.name||'card stack'}`} title="Pile actions" onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();onOpenContextMenu(event,{pileId:pile.id})}}>⋯</button>
     </div>})}

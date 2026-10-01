@@ -62,7 +62,6 @@ function ledgerEntry(room, playerId, payload, before) {
     details={count:dealt.length,countPerPlayer:type==='deal'?count:undefined,recipients:recipients.map(p=>p.name),cards:dealt.map(item=>item.label),cardItems:dealt};
   }
   else if (type === 'shuffle') { description = `Shuffled ${pileName(priorPile)}`; details = { count: priorPile?.cards.length || 0 }; }
-  else if (type === 'cut') { description = `Cut ${pileName(priorPile)}`; details = { count: priorPile?.cards.length || 0 }; }
   else if (type === 'place' || type === 'place-cards') { description = `Placed ${cardsDescription()} on the table`; details = { cards:listedCards(),cardItems, count:cardItems.length, layout: payload.mode || 'grid', stack: payload.targetId || null, position:payload.mode==='grid'?{x:payload.x,y:payload.y}:undefined }; }
   else if (type === 'return-card') { description = `Returned ${cardsDescription()} to the deck`; details = { cards:listedCards(),cardItems,count:cardItems.length }; }
   else if (type === 'return-stack') { const cards=priorPile?.cards||[]; const items=cards.map(card=>({label:cardName(card),privateToPlayerId:payload.toId==='deck'&&!card.faceUp?'__private__':null})); description = `Returned a stack of ${cards.length} cards to ${payload.toId === 'deck' ? 'the deck' : 'discard'}`; details = { cards:items.map(item=>item.label),cardItems:items,count:cards.length,destination:payload.toId,source:priorPile?.name||priorPile?.id }; }
@@ -72,6 +71,7 @@ function ledgerEntry(room, playerId, payload, before) {
   else if (type === 'pile:split-top-fan') { const items=pileItems(priorPile);description = 'Separated the top fan from a stack';details={count:priorPile?.fanGroups?.at(-1)?.length||0,layout:'fan',cards:items.map(item=>item.label),cardItems:items}; }
   else if (type === 'pile:move') { const items=pileItems(priorPile);description = `Moved ${pileName(priorPile)}`; details = { count: priorPile?.cards.length || 0, position: { x: payload.x, y: payload.y },cards:items.map(item=>item.label),cardItems:items }; }
   else if (type === 'pile:create') description = `Created ${payload.name || 'a shared pile'}`;
+  else if (type === 'pile:rename') { description = `Renamed ${pileName(priorPile)} to ${payload.name}`; details = { pileId: priorPile?.id, previousName: priorPile?.name, name: payload.name }; }
   else if (type === 'pile:delete') description = `Deleted an empty ${pileName(priorPile)}`;
   else if (type === 'reset-board') { const beforeCards=before.piles.flatMap(p=>p.cards.map(card=>({label:cardName(card),privateToPlayerId:p.kind==='hand'&&room.settings.privateHands?p.ownerId:!card.faceUp?'__private__':null})));description = 'Reset the board and shuffled a fresh deck'; details = { count: room.piles.find(p=>p.id==='deck')?.cards.length || 0, cards:beforeCards.map(item=>item.label),cardItems:beforeCards,sourcePiles:before.piles.map(p=>({name:p.name||p.id,count:p.cards.length})) }; }
   else if (type === 'undo') description = 'Undid the previous table action';
