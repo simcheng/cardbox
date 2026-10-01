@@ -14,8 +14,9 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     const roomRight=window.innerWidth-rect.right,roomLeft=rect.left;
     setOpensLeft(roomRight<menuWidth&&roomLeft>roomRight);
     const above=Math.max(0,rect.top-12),below=Math.max(0,window.innerHeight-rect.bottom-12);
-    setOpensUp(above>below);
-    setMenuMaxHeight(Math.max(1,Math.min(Math.max(above,below),window.innerHeight-16)));
+    const showAbove=below<Math.min(220,window.innerHeight*.4)&&above>below;
+    setOpensUp(showAbove);
+    setMenuMaxHeight(Math.max(1,Math.min(showAbove?above:below,window.innerHeight-16)));
   }
   useEffect(()=>{
     if(!open)return;
@@ -31,6 +32,8 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
       let dx=rect.left<8?8-rect.left:rect.right>window.innerWidth-8?window.innerWidth-8-rect.right:0;
       let dy=rect.top<8?8-rect.top:rect.bottom>window.innerHeight-8?window.innerHeight-8-rect.bottom:0;
       if(undo&&rect.left<undo.right&&rect.right>undo.left&&rect.top<undo.bottom&&rect.bottom>undo.top)dx=rect.left<undo.left?undo.left-rect.right-8:undo.right-rect.left+8;
+      dx=Math.min(window.innerWidth-8-rect.right,Math.max(8-rect.left,dx));
+      dy=Math.min(window.innerHeight-8-rect.bottom,Math.max(8-rect.top,dy));
       if(dx||dy)setOffset(current=>({x:current.x+dx,y:current.y+dy}));
     };
     window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize);

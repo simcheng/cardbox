@@ -12,8 +12,9 @@ export function resolveTablePlacement(clientX, clientY, rect, nearbyPiles = [], 
   const nearby = nearbyPiles.map((pile) => ({ ...pile, distance: Math.hypot(clientX - (pile.rect.left + pile.rect.width / 2), clientY - (pile.rect.top + pile.rect.height / 2)) })).sort((a,b) => a.distance - b.distance)[0];
   const target = preferredPileId ? nearbyPiles.find((pile) => pile.id === preferredPileId) : nearby?.distance < PILE_SNAP_DISTANCE ? nearby : null;
   if (target) {
-    const fan = clientX > target.rect.left + target.rect.width * .62;
-    return { x: fan ? target.x + 3 : target.x, y: target.y, targetId: target.id, mode: fan ? 'fan' : 'stack' };
+    const progress = (clientX-target.rect.left)/Math.max(1,target.rect.width);
+    const mode = progress > .7 ? 'fan' : progress > .42 ? 'fan-stack' : 'stack';
+    return { x: mode==='fan'?target.x+3:target.x, y: target.y, targetId: target.id, mode };
   }
   return snapToTable(clientX, clientY, rect);
 }

@@ -20,7 +20,10 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
     </> : <>
       {canPlay&&pile.kind === 'deck' && <><button role="menuitem" onClick={()=>run('draw')}>Draw a card</button><button role="menuitem" onClick={()=>run('shuffle')}>Shuffle deck</button><button role="menuitem" onClick={()=>run('cut')}>Cut deck</button></>}
       {canPlay&&pile.kind === 'tableau' && <>
+        <button role="menuitem" onClick={()=>run('move-stack',{fromId:pile.id,toId:`hand-${playerId}`})}>Move whole stack to my hand</button>
         <button role="menuitem" onClick={()=>run('pile:layout',{layout:pile.layout==='fan'?'stack':'fan'})}>{pile.layout==='fan'?'Square up stack':'Fan cards'}</button>
+        <button role="menuitem" onClick={()=>run('pile:layout',{layout:pile.layout==='fan-stack'?'fan':'fan-stack'})}>{pile.layout==='fan-stack'?'Show as one fan':'Layer a fan on this stack'}</button>
+        {pile.layout==='fan-stack'&&pile.fanGroups?.length>1&&<button role="menuitem" onClick={()=>run('pile:split-top-fan')}>Separate top fan</button>}
         <button role="menuitem" onClick={()=>run('flip-top')}>Flip top card</button>
         <button role="menuitem" onClick={()=>run('return-stack',{toId:'deck'})}>Return whole stack to deck</button>
         <button role="menuitem" onClick={()=>run('return-stack',{toId:'discard'})}>Discard whole stack</button>

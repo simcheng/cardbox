@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Card from './Card.jsx';
 
 export default function TableSurface({
@@ -10,6 +10,19 @@ export default function TableSurface({
   onConfirmPlacement, onCancelPlacement, pendingPlacement, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel,
 }) {
   const [drawFlight,setDrawFlight]=useState(null);
+  const [surfaceSize,setSurfaceSize]=useState({width:0,height:0});
+  useEffect(()=>{
+    const surface=tableRef.current;
+    if(!surface)return;
+    const measure=()=>{
+      const next={width:surface.clientWidth,height:surface.clientHeight};
+      setSurfaceSize(current=>current.width===next.width&&current.height===next.height?current:next);
+    };
+    measure();
+    const observer=new ResizeObserver(measure);
+    observer.observe(surface);
+    return()=>observer.disconnect();
+  },[tableRef]);
   useEffect(()=>{
     if(!['draw','deal'].includes(cue?.type)||!(cue.playerId===playerId||cue.recipientIds?.includes(playerId))){setDrawFlight(null);return;}
     setDrawFlight(null);
@@ -27,6 +40,16 @@ export default function TableSurface({
   const opponents = activePlayers.filter((player)=>player.id!==playerId);
   const self = room.players.find((player)=>player.id===playerId);
   const playerCount = activePlayers.length;
+  const previewPosition=preview&&surfaceSize.width&&surfaceSize.height?{
+    x:Math.min(surfaceSize.width-34,Math.max(34,preview.x/100*surfaceSize.width)),
+    y:Math.min(surfaceSize.height-48,Math.max(48,preview.y/100*surfaceSize.height)),
+  }:null;
+  const confirmPosition=previewPosition?{
+    x:Math.min(surfaceSize.width-98,Math.max(98,previewPosition.x)),
+    y:previewPosition.y+108<surfaceSize.height-8?previewPosition.y+56:Math.max(8,previewPosition.y-100),
+  }:null;
+  const selectedSignature=selectedIds.join('\0');
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedSignature]);
   const selfIndex = Math.max(0, activePlayers.findIndex(player=>player.id===playerId));
   const seats = opponents.map((player)=>{
     const index = activePlayers.findIndex(item=>item.id===player.id);
@@ -44,16 +67,39 @@ export default function TableSurface({
     </div>)}
     {cue?.type==='chat'&&cue.playerId===playerId&&cue.message&&<div className="self-chat-notification" key={cue.id} style={{'--player-color':self?.color}}><span>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</span><b>{cue.message}</b></div>}
     {cue?.type==='chat:react'&&cue.playerId===playerId&&cue.emoji&&<div className="self-chat-notification reaction-notification" key={cue.id} style={{'--player-color':self?.color}}><span>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</span><b>reacted {cue.emoji}</b></div>}
-    {room.piles.filter((pile)=>pile.kind!=='hand').map((pile)=><div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.toId===pile.id?`action-${cueClass}`:''}`} style={{left:`${pileDrag?.pileId===pile.id?pileDrag.x:pile.x}%`,top:`${pileDrag?.pileId===pile.id?pileDrag.y:pile.y}%`}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
-      <div className="pile-cards">{pile.cards.length>0?<>{pile.cards.slice(pile.kind==='tableau'?-8:-3).map((card,index)=><Card key={card.id} card={card} index={index} selected={selectedIds.includes(card.id)||contextCardId===card.id} dragging={dragCardId===card.id} actionCue={cue?.cardId===card.id} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>)}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
+    {room.piles.filter((pile)=>pile.kind!=='hand').map((pile)=>{
+      const isFan=pile.kind==='tableau'&&['fan','fan-stack'].includes(pile.layout);
+      const groupIds=isFan?(pile.layout==='fan-stack'?(pile.fanGroups?.length?pile.fanGroups:[pile.cards.map(card=>card.id)]):[pile.cards.map(card=>card.id)]):[];
+      const groupByCard=isFan?new Map():null;
+      if(isFan)for(let group=0;group<groupIds.length;group++){
+        const ids=groupIds[group];
+        for(let index=0;index<ids.length;index++)groupByCard.set(ids[index],{group,index,count:ids.length});
+      }
+      const longestFan=groupIds.reduce((max,ids)=>Math.max(max,ids.length),0);
+      const surfaceWidth=surfaceSize.width;
+      const surfaceHeight=surfaceSize.height;
+      const usableWidth=Math.max(140,surfaceWidth-24);
+      const fanStep=Math.min(5,Math.max(1,(usableWidth-67)/Math.max(1,longestFan-1)));
+      const groupStep=Math.min(12,Math.max(0,(usableWidth-(67+fanStep*Math.max(0,longestFan-1)))/Math.max(1,groupIds.length-1)));
+      const groupYStep=Math.min(5,Math.max(0,(surfaceHeight-138)/Math.max(1,groupIds.length-1)));
+      const fanWidth=Math.max(74,67+fanStep*Math.max(0,longestFan-1)+Math.max(0,groupIds.length-1)*groupStep);
+      const draggedX=pileDrag?.pileId===pile.id?pileDrag.x:pile.x;
+      const pileX=isFan&&surfaceWidth>0?Math.min(100-(fanWidth/2+8)/surfaceWidth*100,Math.max((fanWidth/2+8)/surfaceWidth*100,draggedX)):draggedX;
+      const draggedY=pileDrag?.pileId===pile.id?pileDrag.y:pile.y;
+      const fanTopMargin=(76+Math.max(0,groupIds.length-1)*groupYStep)/Math.max(1,surfaceHeight)*100;
+      const fanBottomMargin=69/Math.max(1,surfaceHeight)*100;
+      const pileY=isFan&&surfaceHeight>0?Math.min(100-fanBottomMargin,Math.max(fanTopMargin,draggedY)):draggedY;
+      const cardsToShow=isFan?pile.cards:pile.cards.slice(pile.kind==='tableau'?-8:-3);
+      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.toId===pile.id?`action-${cueClass}`:''}`} style={{left:`${pileX}%`,top:`${pileY}%`}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
+      <div className="pile-cards" style={isFan?{width:`${fanWidth}px`}:undefined}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard.get(card.id)||{group:0,index,count:cardsToShow.length};const fanStyle=isFan?{'--fan':meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.group*100+meta.index}:undefined;return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={dragCardId===card.id} actionCue={cue?.cardId===card.id} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
       {pile.kind==='tableau'&&pile.cards.length>0&&<span className="stack-count" aria-label={`${pile.cards.length} cards in stack`}>{pile.cards.length}</span>}
       {pile.kind!=='tableau'&&<span className="pile-label">{pile.name}<small>{pile.cards.length} {pile.cards.length===1?'card':'cards'}</small></span>}
       <button className={`pile-grab ${pile.kind==='tableau'?'tableau-grab':''}`} aria-label={`Move ${pile.name||'card stack'}`} title="Drag to move" onClick={(event)=>event.stopPropagation()}>⠿</button>
       <button className="pile-menu-button" aria-label={`Actions for ${pile.name||'card stack'}`} title="Pile actions" onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();onOpenContextMenu(event,{pileId:pile.id})}}>⋯</button>
-    </div>)}
+    </div>})}
     <div className={dragOverHand?'hand-drop-active':''}>{handZone}</div>
     {selectionBox&&<div className="selection-box" style={{left:selectionBox.x,top:selectionBox.y,width:selectionBox.width,height:selectionBox.height}} aria-hidden="true"/>}
-    {preview&&<><button type="button" className={`placement-preview preview-${preview.mode} ${pendingPlacement?'is-clickable':''}`} aria-label={`Place ${previewCount} ${previewCount===1?'card':'cards'} here`} title={pendingPlacement?'Click to place here':''} onClick={pendingPlacement?onConfirmPlacement:undefined} style={{left:`${preview.x}%`,top:`${preview.y}%`}}><span className={previewCard?.color==='red'?'red-card':''}>{previewCard?.rank&&previewCard.faceUp?`${previewCard.rank}${previewCard.suit}`:'♧'}</span>{previewCount>1&&<b className="preview-count">{previewCount}</b>}</button>{pendingPlacement&&<div className="placement-confirm" style={{left:`${preview.x}%`,top:`${preview.y}%`}}><button onClick={onConfirmPlacement}>Place {pendingPlacement.cards.length>1?`${pendingPlacement.cards.length} cards`:'card'}</button><button onClick={onCancelPlacement}>Cancel</button></div>}</>}
+    {preview&&<><button type="button" className={`placement-preview preview-${preview.mode} ${pendingPlacement?'is-clickable':''}`} aria-label={`Place ${previewCount} ${previewCount===1?'card':'cards'} ${preview.mode==='fan-stack'?'as a separate fan':''}`} title={pendingPlacement?'Click to place here':''} onClick={pendingPlacement?onConfirmPlacement:undefined} style={previewPosition?{left:`${previewPosition.x}px`,top:`${previewPosition.y}px`}:{left:`${preview.x}%`,top:`${preview.y}%`}}><span className={previewCard?.color==='red'?'red-card':''}>{previewCard?.rank&&previewCard.faceUp?`${previewCard.rank}${previewCard.suit}`:'♧'}</span>{preview.mode==='fan-stack'&&<small className="preview-mode-label">Layer fan</small>}{previewCount>1&&<b className="preview-count">{previewCount}</b>}</button>{pendingPlacement&&<div className="placement-confirm" style={confirmPosition?{left:`${confirmPosition.x}px`,top:`${confirmPosition.y}px`,transform:'translateX(-50%)'}:{left:`${preview.x}%`,top:`${preview.y}%`}}><button onClick={onConfirmPlacement}>Place {pendingPlacement.cards.length>1?`${pendingPlacement.cards.length} cards`:'card'}</button><button onClick={onCancelPlacement}>Cancel</button></div>}</>}
     {dragCardId&&dragPosition&&<div className={`drag-ghost ${dragCount>1?'is-group':''}`} style={{left:dragPosition.x,top:dragPosition.y}}><Card card={dragPosition.card} index={0}/>{dragCount>1&&<b className="drag-count">{dragCount}</b>}<span>{dragOverHand?`Add ${dragCount===1?'card':`${dragCount} cards`} to hand`:`Move ${dragCount===1?'card':`${dragCount} cards`}`}</span></div>}
     {drawFlight&&Array.from({length:drawFlight.count},(_,index)=><div key={`${drawFlight.id}-${index}`} className="draw-flight" style={{'--draw-x':`${drawFlight.x+index*3}px`,'--draw-y':`${drawFlight.y-index*2}px`,'--draw-dx':`${drawFlight.dx}px`,'--draw-dy':`${drawFlight.dy}px`,'--draw-delay':`${index*45}ms`}}><div>♧</div></div>)}
     <div className="table-label label-bottom">A LITTLE LUCK <span>✦</span> A LOT OF LAUGHTER</div>
