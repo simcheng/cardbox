@@ -113,12 +113,23 @@ io.on('connection', (socket) => {
     if (!result.ok) return done(result);
     room.ledger.push(ledgerEntry(room, playerId, payload, before));
     if (room.ledger.length > 1000) room.ledger.shift();
+    const drawRecipients = payload.type === 'deal'
+      ? (payload.toAll ? [...room.players.keys()] : [playerId])
+      : payload.type === 'draw' ? [playerId] : [];
+    const drawCounts = Object.fromEntries(drawRecipients.map((recipientId) => {
+      const handId = `hand-${recipientId}`;
+      const beforeCount = before.piles.find((pile) => pile.id === handId)?.cards.length || 0;
+      const afterCount = room.piles.find((pile) => pile.id === handId)?.cards.length || 0;
+      return [recipientId, Math.max(0, afterCount - beforeCount)];
+    }));
     io.to(`room:${room.id}`).emit('table:cue', {
       id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
       type: payload.type, playerId,
       pileId: payload.pileId || payload.fromId || (payload.type === 'place' ? payload.targetId : null),
       cardId: payload.cardId || null, toId: payload.toId || null,
-      recipientIds: payload.type === 'deal' ? (payload.toAll ? [...room.players.keys()] : [playerId]) : payload.type === 'draw' ? [playerId] : [],
+      recipientIds: drawRecipients,
+      drawCount: drawCounts[playerId] || 0,
+      drawCounts,
       message: payload.type === 'chat' ? String(payload.message || '').slice(0, 90) : '',
       emoji: payload.type === 'chat:react' ? payload.emoji : '',
       messageId: payload.type === 'chat:react' ? payload.messageId : '',

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selectedCount, onAction, onFlipSelected, onLedger, onMoveSelection, onClearSelection }) {
-  const [open, setOpen] = useState(false), [deckOpen, setDeckOpen] = useState(true), [dealCount, setDealCount] = useState(1), [opensUp, setOpensUp] = useState(true), [menuMaxHeight,setMenuMaxHeight]=useState(360), [confirmReset, setConfirmReset] = useState(false), [offset, setOffset] = useState({x:0,y:0}), [dragging, setDragging] = useState(false);
+  const [open, setOpen] = useState(false), [deckOpen, setDeckOpen] = useState(true), [dealCount, setDealCount] = useState(1), [opensUp, setOpensUp] = useState(true), [opensLeft,setOpensLeft]=useState(true), [menuMaxHeight,setMenuMaxHeight]=useState(360), [confirmReset, setConfirmReset] = useState(false), [offset, setOffset] = useState({x:0,y:0}), [dragging, setDragging] = useState(false);
   const toolbarRef=useRef(null),dragRef=useRef(null),moreRef=useRef(null),menuRef=useRef(null),undoRef=useRef(null);
   const toggleMore = (event) => {
     positionMenu(event.currentTarget);
@@ -10,6 +10,9 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
   function positionMenu(anchor=moreRef.current) {
     if(!anchor)return;
     const rect=anchor.getBoundingClientRect();
+    const menuWidth=menuRef.current?.getBoundingClientRect().width||270;
+    const roomRight=window.innerWidth-rect.right,roomLeft=rect.left;
+    setOpensLeft(roomRight<menuWidth&&roomLeft>roomRight);
     const above=Math.max(0,rect.top-12),below=Math.max(0,window.innerHeight-rect.bottom-12);
     setOpensUp(above>below);
     setMenuMaxHeight(Math.max(1,Math.min(Math.max(above,below),window.innerHeight-16)));
@@ -63,7 +66,7 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
         <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('deal',{count:1})}><span>♧</span><label>Deal one</label></button>
         <div className="tool-dropdown">
           <button ref={moreRef} className="tool-more" aria-expanded={open} aria-label="More card actions" onClick={toggleMore}>•••</button>
-          {open&&<div ref={menuRef} style={{'--menu-max-height':`${menuMaxHeight}px`}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'}`}>
+          {open&&<div ref={menuRef} style={{'--menu-max-height':`${menuMaxHeight}px`}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'} ${opensLeft?'opens-left':'opens-right'}`}>
             <b>More card actions</b>
             {canPlay&&<>
               <button onClick={()=>{onAction('deal',{count:5});setOpen(false)}}>Deal 5 to me</button>

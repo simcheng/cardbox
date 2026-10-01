@@ -30,7 +30,7 @@ function App() {
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [chatText, setChatText] = useState(''), [inviteOpen, setInviteOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(false), [unreadChat, setUnreadChat] = useState(0), [toast, setToast] = useState('');
-  const [preview, setPreview] = useState(null), [dragCard, setDragCard] = useState(null), [dragPosition, setDragPosition] = useState(null), [dragOverHand, setDragOverHand] = useState(false), [pendingPlacement, setPendingPlacement] = useState(null);
+  const [preview, setPreview] = useState(null), [dragCard, setDragCard] = useState(null), [dragCount, setDragCount] = useState(1), [dragPosition, setDragPosition] = useState(null), [dragOverHand, setDragOverHand] = useState(false), [pendingPlacement, setPendingPlacement] = useState(null);
   const [theme, setTheme] = useState(localStorage.getItem('cardtable:theme') || 'light');
   const [handCollapsed, setHandCollapsed] = useState(false), [pileDrag, setPileDrag] = useState(null);
   const [contextMenu, setContextMenu] = useState(null), [cue, setCue] = useState(null);
@@ -53,7 +53,7 @@ function App() {
   function placeSelection(spot, cards = selected) {
     if (!spot || !cards.length) return;
     action('place-cards',{cards:cards.map(({card,pileId})=>({cardId:card.id,fromId:pileId})),x:spot.x,y:spot.y,targetId:spot.targetId,mode:spot.mode});
-    clearSelection(); setPreview(null); setPendingPlacement(null);
+    clearSelection(); setPreview(null); setPendingPlacement(null); setDragCard(null); setDragCount(1); setDragPosition(null); setDragOverHand(false);
   }
   function setColorTheme(next) { setTheme(next); localStorage.setItem('cardtable:theme', next); }
 
@@ -133,17 +133,19 @@ function App() {
   }
   function placementAt(clientX,clientY) {
     if (!tableRef.current) return;
+    const tableRect = tableRef.current.getBoundingClientRect();
+    if (clientX < tableRect.left || clientX > tableRect.right || clientY < tableRect.top || clientY > tableRect.bottom) return null;
     const piles = [...document.querySelectorAll('.tableau-zone')].map((element) => {
       const pile = room.piles.find((item) => item.id === element.dataset.placeId);
       return pile && { ...pile, rect: element.getBoundingClientRect() };
     }).filter(Boolean);
     const hitId = document.elementFromPoint(clientX, clientY)?.closest('.tableau-zone')?.dataset.placeId;
     const directHit = hitId ? piles.filter((pile) => pile.id === hitId) : piles;
-    return resolveTablePlacement(clientX, clientY, tableRef.current.getBoundingClientRect(), directHit, hitId);
+    return resolveTablePlacement(clientX, clientY, tableRect, directHit, hitId);
   }
   function previewAt(e) {
     const spot = placementAt(e.clientX,e.clientY);
-    if (spot) setPreview(spot);
+    setPreview(spot||null);
     return spot;
   }
   function onTableClick(e) {
@@ -162,6 +164,7 @@ function App() {
   function onCardPointerDown(e, card, fromId) {
     if (e.button !== undefined && e.button !== 0) return;
     if (!canPlay && fromId !== myHand?.id) return;
+    if (pendingPlacement) { setPendingPlacement(null); setPreview(null); }
     const group = selected.find(item=>item.card.id===card.id) ? selected : [{card,pileId:fromId}];
     cardPointer.current = { card, fromId, cards:group, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -170,7 +173,7 @@ function App() {
     const active = cardPointer.current;
     if (!active || active.pointerId !== e.pointerId) return;
     if (!active.dragging && Math.hypot(e.clientX-active.startX,e.clientY-active.startY) > 7) {
-      active.dragging = true; setDragCard(active.card);
+      active.dragging = true; setDragCard(active.card); setDragCount(active.cards.length);
     }
     if (active.dragging) {
       e.preventDefault();
@@ -193,24 +196,34 @@ function App() {
           if(active.cards.length===1){if(beforeCardId!==active.card.id)action('hand:reorder',{cardId:active.card.id,beforeCardId});}
           else if(!active.cards.some(item=>item.card.id===beforeCardId))action('hand:reorder-cards',{cardIds:active.cards.map(item=>item.card.id),beforeCardId});
         } else moveSelection(handId,active.cards);
-        setPreview(null);clearSelection();setDragCard(null);setDragPosition(null);setDragOverHand(false);
+        setPreview(null);clearSelection();setDragCard(null);setDragCount(1);setDragPosition(null);setDragOverHand(false);
       } else {
+        const targetElement = document.elementFromPoint(e.clientX,e.clientY)?.closest('.pile-zone');
+        const targetPile = targetElement && room.piles.find(pile=>pile.id===targetElement.dataset.placeId);
+        if (targetPile && targetPile.kind !== 'tableau') {
+          if (!canPlay) setToast('The host controls this table.');
+          else moveSelection(targetPile.id,active.cards);
+          setPreview(null);setPendingPlacement(null);clearSelection();setDragCard(null);setDragCount(1);setDragPosition(null);setDragOverHand(false);
+          ignoreClick.current = true; setTimeout(()=>{ignoreClick.current=false;},250);
+          return;
+        }
         if (!canPlay) {
-          setPreview(null); clearSelection(); setDragCard(null); setDragPosition(null); setDragOverHand(false);
+          setPreview(null); clearSelection(); setDragCard(null); setDragCount(1); setDragPosition(null); setDragOverHand(false);
           setToast('The host controls this table.');
           ignoreClick.current = true; setTimeout(()=>{ignoreClick.current=false;},250);
           return;
         }
-        const finalSpot = previewAt(e) || preview;
+        const finalSpot = previewAt(e);
         if (finalSpot) placeSelection(finalSpot,active.cards);
-        setDragPosition(null);setDragOverHand(false);
+        else { clearSelection(); setPendingPlacement(null); setPreview(null); }
+        setDragCard(null);setDragCount(1);setDragPosition(null);setDragOverHand(false);
       }
       ignoreClick.current = true; setTimeout(()=>{ignoreClick.current=false;},250);
     }
   }
   function onCardPointerCancel(e) {
     if (cardPointer.current?.pointerId !== e.pointerId) return;
-    cardPointer.current = null; setPreview(null); clearSelection(); setDragCard(null); setDragPosition(null); setDragOverHand(false);
+    cardPointer.current = null; setPendingPlacement(null); setPreview(null); clearSelection(); setDragCard(null); setDragCount(1); setDragPosition(null); setDragOverHand(false);
   }
   function onPilePointerDown(e, pile) {
     if (!canPlay || pile.kind === 'hand' || (e.target.closest('.playing-card') && !e.target.closest('.pile-grab'))) return;
@@ -290,7 +303,7 @@ function App() {
   return <main className={`app-shell ${cue?`cue-${cue.type.replace(':','-')}`:''}`} data-theme={theme}>
     <header className="topbar"><a className="brand" href="/" onClick={(e)=>{e.preventDefault();history.pushState({},'',location.pathname);setRoom(null)}}><span className="brand-mark">♧</span> cardtable</a><div className="table-title"><span className="table-dot"/><div><b>{room.name}</b><small>{room.players.filter(p=>p.online).length} at the table</small></div></div><div className="top-actions"><button className="chat-top-button" onClick={toggleChat} aria-expanded={mobilePanel}>☰ <span>Chat</span>{unreadChat>0&&<i className="chat-unread">{unreadChat}</i>}</button><button className="icon-button theme-toggle" onClick={()=>setColorTheme(theme==='dark'?'light':'dark')} aria-label={theme==='dark'?'Use light theme':'Use dark theme'}>{theme==='dark'?'☼':'☾'}</button><button className="subtle-button invite-button" aria-label="Invite friends" onClick={()=>setInviteOpen(true)}>↗ <span>Invite friends</span></button>{isHost&&<button className="icon-button settings-trigger" onClick={()=>setSettingsOpen(!settingsOpen)} aria-label="Table settings">⚙</button>}<div className="profile-control"><button className={`avatar ${cue?.playerId===playerId?'action-actor':''}`} style={{'--avatar':self?.color}} title={self?.name} aria-label="Open profile menu" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</button><ProfileMenu open={profileOpen} player={self} isHost={isHost} room={room} theme={theme} onTheme={()=>setColorTheme(theme==='dark'?'light':'dark')} onInvite={()=>setInviteOpen(true)} onSettings={()=>setSettingsOpen(true)} onProfile={(values)=>action('profile',values)} onClose={()=>setProfileOpen(false)} onToast={setToast}/></div></div></header>
     <div className="game-layout"><section className="play-area"><div className="table-heading"><div><span className="eyebrow light">THE TABLE</span><h2>Make yourself at home.</h2></div><div className="table-tools"><button className="more-button" aria-expanded={menu==='actions'} onClick={()=>setMenu(menu==='actions'?'':'actions')}>•••</button>{menu==='actions'&&<div className="popover action-menu"><b>Table actions</b>{canPlay&&<><button onClick={()=>{action('pile:create',{name:'New pile'});setMenu('')}}>＋ Add a pile</button><button onClick={()=>{action('shuffle',{pileId:'deck'});setMenu('')}}>↻ Shuffle the deck</button></>}<button onClick={()=>{setLedgerOpen(true);setMenu('')}}>◷ View action history</button>{isHost&&<button onClick={()=>{setSettingsOpen(true);setMenu('')}}>⚙ Table settings</button>}</div>}</div></div>
-      <TableSurface room={room} playerId={playerId} tableRef={tableRef} selectedIds={selectedIds} selectionBox={selectionBox} preview={preview} previewCard={previewCard} pileDrag={pileDrag} handZone={handZone} cue={cue} contextCardId={contextMenu?.cardId} dragCardId={dragCard?.id} dragPosition={dragPosition} dragOverHand={dragOverHand} onOpenContextMenu={openContextMenu} onSurfaceClick={onTableClick} onSurfacePointerDown={onSurfacePointerDown} onSurfacePointerMove={onSurfacePointerMove} onSurfacePointerUp={onSurfacePointerUp} onSurfacePointerCancel={onSurfacePointerCancel} onPileClick={onPileClick} onCardClick={onCardClick} onPilePointerDown={onPilePointerDown} onPilePointerMove={onPilePointerMove} onPilePointerUp={onPilePointerUp} onPilePointerCancel={onPilePointerCancel} onCardPointerDown={onCardPointerDown} onCardPointerMove={onCardPointerMove} onCardPointerUp={onCardPointerUp} onCardPointerCancel={onCardPointerCancel} onConfirmPlacement={commitPreview} onCancelPlacement={cancelPreview} pendingPlacement={pendingPlacement}/>
+      <TableSurface room={room} playerId={playerId} tableRef={tableRef} selectedIds={selectedIds} selectionBox={selectionBox} preview={preview} previewCard={previewCard} previewCount={pendingPlacement?.cards?.length||dragCount} dragCount={dragCount} pileDrag={pileDrag} handZone={handZone} cue={cue} contextCardId={contextMenu?.cardId} dragCardId={dragCard?.id} dragPosition={dragPosition} dragOverHand={dragOverHand} onOpenContextMenu={openContextMenu} onSurfaceClick={onTableClick} onSurfacePointerDown={onSurfacePointerDown} onSurfacePointerMove={onSurfacePointerMove} onSurfacePointerUp={onSurfacePointerUp} onSurfacePointerCancel={onSurfacePointerCancel} onPileClick={onPileClick} onCardClick={onCardClick} onPilePointerDown={onPilePointerDown} onPilePointerMove={onPilePointerMove} onPilePointerUp={onPilePointerUp} onPilePointerCancel={onPilePointerCancel} onCardPointerDown={onCardPointerDown} onCardPointerMove={onCardPointerMove} onCardPointerUp={onCardPointerUp} onCardPointerCancel={onCardPointerCancel} onConfirmPlacement={commitPreview} onCancelPlacement={cancelPreview} pendingPlacement={pendingPlacement}/>
       <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isHost} selectedCount={selected.length} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
     </section></div>
     <ChatDrawer open={mobilePanel} room={room} playerId={playerId} text={chatText} setText={setChatText} onSend={sendChat} onReact={(messageId,emoji)=>action('chat:react',{messageId,emoji})} onClose={()=>setMobilePanel(false)} onInvite={copyInvite} chatEnd={chatEnd} theme={theme}/>

@@ -1,14 +1,28 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Card from './Card.jsx';
 
 export default function TableSurface({
-  room, playerId, tableRef, selectedIds = [], preview, previewCard, pileDrag, selectionBox,
+  room, playerId, tableRef, selectedIds = [], preview, previewCard, previewCount = 1, dragCount = 1, pileDrag, selectionBox,
   handZone, onSurfaceClick, onCardClick, onPileClick,
   onPilePointerDown, onPilePointerMove, onPilePointerUp, onPilePointerCancel,
   onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardPointerCancel,
   onOpenContextMenu, dragCardId, dragPosition, dragOverHand, contextCardId, cue,
   onConfirmPlacement, onCancelPlacement, pendingPlacement, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel,
 }) {
+  const [drawFlight,setDrawFlight]=useState(null);
+  useEffect(()=>{
+    if(!['draw','deal'].includes(cue?.type)||!(cue.playerId===playerId||cue.recipientIds?.includes(playerId))){setDrawFlight(null);return;}
+    setDrawFlight(null);
+    let frame=requestAnimationFrame(()=>{
+      const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone');
+      if(!surface||!deck||!hand)return;
+      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect(),h=hand.getBoundingClientRect();
+      const dealt=cue.drawCounts?.[playerId] ?? cue.drawCount ?? 1;
+      if(dealt<1)return;
+      setDrawFlight({id:cue.id,x:d.left+d.width/2-s.left-28.5,y:d.top+d.height/2-s.top-40,dx:h.left+h.width/2-(d.left+d.width/2),dy:h.top+h.height/2-(d.top+d.height/2),count:Math.min(3,dealt)});
+    });
+    return()=>cancelAnimationFrame(frame);
+  },[cue?.id,playerId,tableRef]);
   const activePlayers = room.players.filter(player=>player.online || player.id===playerId);
   const opponents = activePlayers.filter((player)=>player.id!==playerId);
   const self = room.players.find((player)=>player.id===playerId);
@@ -39,8 +53,9 @@ export default function TableSurface({
     </div>)}
     <div className={dragOverHand?'hand-drop-active':''}>{handZone}</div>
     {selectionBox&&<div className="selection-box" style={{left:selectionBox.x,top:selectionBox.y,width:selectionBox.width,height:selectionBox.height}} aria-hidden="true"/>}
-    {preview&&<><div className={`placement-preview preview-${preview.mode}`} style={{left:`${preview.x}%`,top:`${preview.y}%`}}><span className={previewCard?.color==='red'?'red-card':''}>{previewCard?.rank&&previewCard.faceUp?`${previewCard.rank}${previewCard.suit}`:'♧'}</span></div>{pendingPlacement&&<div className="placement-confirm" style={{left:`${preview.x}%`,top:`${preview.y}%`}}><button onClick={onConfirmPlacement}>Place card</button><button onClick={onCancelPlacement}>Cancel</button></div>}</>}
-    {dragCardId&&dragPosition&&<div className="drag-ghost" style={{left:dragPosition.x,top:dragPosition.y}}><Card card={dragPosition.card} index={0}/><span>{dragOverHand?'Add to hand':'Drag to place'}</span></div>}
+    {preview&&<><button type="button" className={`placement-preview preview-${preview.mode} ${pendingPlacement?'is-clickable':''}`} aria-label={`Place ${previewCount} ${previewCount===1?'card':'cards'} here`} title={pendingPlacement?'Click to place here':''} onClick={pendingPlacement?onConfirmPlacement:undefined} style={{left:`${preview.x}%`,top:`${preview.y}%`}}><span className={previewCard?.color==='red'?'red-card':''}>{previewCard?.rank&&previewCard.faceUp?`${previewCard.rank}${previewCard.suit}`:'♧'}</span>{previewCount>1&&<b className="preview-count">{previewCount}</b>}</button>{pendingPlacement&&<div className="placement-confirm" style={{left:`${preview.x}%`,top:`${preview.y}%`}}><button onClick={onConfirmPlacement}>Place {pendingPlacement.cards.length>1?`${pendingPlacement.cards.length} cards`:'card'}</button><button onClick={onCancelPlacement}>Cancel</button></div>}</>}
+    {dragCardId&&dragPosition&&<div className={`drag-ghost ${dragCount>1?'is-group':''}`} style={{left:dragPosition.x,top:dragPosition.y}}><Card card={dragPosition.card} index={0}/>{dragCount>1&&<b className="drag-count">{dragCount}</b>}<span>{dragOverHand?`Add ${dragCount===1?'card':`${dragCount} cards`} to hand`:`Move ${dragCount===1?'card':`${dragCount} cards`}`}</span></div>}
+    {drawFlight&&Array.from({length:drawFlight.count},(_,index)=><div key={`${drawFlight.id}-${index}`} className="draw-flight" style={{'--draw-x':`${drawFlight.x+index*3}px`,'--draw-y':`${drawFlight.y-index*2}px`,'--draw-dx':`${drawFlight.dx}px`,'--draw-dy':`${drawFlight.dy}px`,'--draw-delay':`${index*45}ms`}}><div>♧</div></div>)}
     <div className="table-label label-bottom">A LITTLE LUCK <span>✦</span> A LOT OF LAUGHTER</div>
   </div></div>;
 }
