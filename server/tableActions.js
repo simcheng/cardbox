@@ -267,6 +267,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     if (!isHost) return reject('Only the primary host can assign host roles.');
     const target=room.players.get(payload.targetId);
     if(!target)return reject('Choose a player at this table.');
+    if(!target.online)return reject('That player must be online to change host roles.');
     if(payload.role==='cohost'){
       if(target.id===room.hostId)return reject('The primary host cannot be a cohost.');
       if(room.cohostIds.has(target.id))room.cohostIds.delete(target.id);else room.cohostIds.add(target.id);
