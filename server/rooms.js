@@ -25,11 +25,20 @@ function publicRoom(room, viewerId) {
       handCount: room.piles.find((pile) => pile.kind === 'hand' && pile.ownerId === p.id)?.cards.length || 0,
     })),
     piles: room.piles.map((pile) => ({ ...pile, cards: pile.cards.map((card) => {
-      if (pile.kind !== 'hand') return card;
-      if (!settings.privateHands || pile.ownerId === viewerId) return card;
-      return { ...card, rank: null, suit: null, color: 'back', faceUp: false };
+      const isPrivateHand = pile.kind === 'hand' && settings.privateHands && pile.ownerId !== viewerId;
+      const isFaceDown = pile.kind !== 'hand' && !card.faceUp;
+      if (!isPrivateHand && !isFaceDown) return card;
+      // Keep the opaque card id for interactions, but never send identity data
+      // for cards the viewer isn't allowed to see (including the deck order).
+      return { ...card, rank: null, suit: null, color: 'back', faceUp: false, ownerId: null };
     }) })),
-    chat: room.chat.slice(-100), ledger: room.ledger.slice(-500), updatedAt: room.updatedAt,
+    chat: room.chat.slice(-100), ledger: room.ledger.slice(-500).map((entry)=>{
+      const { cardItems, ...details } = entry.details || {};
+      const hidden = cardItems?.some((item)=>item.privateToPlayerId==='__private__'||(settings.privateHands&&item.privateToPlayerId&&item.privateToPlayerId!==viewerId));
+      const cards = cardItems?.map((item)=>item.privateToPlayerId==='__private__'||(settings.privateHands&&item.privateToPlayerId&&item.privateToPlayerId!==viewerId)?'Hidden card':item.label) || details.cards;
+      const { privateDescription, ...visibleEntry }=entry;
+      return { ...visibleEntry, description:hidden?(privateDescription||entry.description):entry.description, details: { ...details, ...(cards?{cards}:{}), cardItems:undefined } };
+    }), updatedAt: room.updatedAt,
   };
 }
 

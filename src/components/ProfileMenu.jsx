@@ -13,11 +13,11 @@ export default function ProfileMenu({ open, player, isHost, room, theme, onTheme
   if (!open) return null;
   async function copyCode() { try { await copyText(room.id); onToast('Room code copied'); onClose(); } catch { onToast('Select the room code to copy it'); } }
   return <><button className="profile-dismiss" aria-label="Close profile menu" onClick={onClose}/><div className="profile-popover" role="menu">
-    <div className="profile-summary"><span className="avatar" style={{'--avatar':player?.color}}>{player?.emoji||player?.name?.slice(0,1).toUpperCase()}</span><span><b>{player?.name}</b><small>{isHost?'Table host':'Guest player'}</small></span></div>
+    <div className="profile-summary"><span className="avatar profile-avatar">{player?.emoji||player?.name?.slice(0,1).toUpperCase()}</span><span><b>{player?.name}</b><small>{isHost?'Table host':'Guest player'}</small></span></div>
     <div className="profile-customize"><label>AVATAR</label><div className="profile-emoji-options">{ANIMALS.map(emoji=><button key={emoji} className={player?.emoji===emoji?'chosen':''} aria-label={`Use ${emoji} avatar`} aria-pressed={player?.emoji===emoji} onClick={()=>onProfile({emoji})}>{emoji}</button>)}</div><label>BACKGROUND</label><div className="profile-color-options">{COLORS.map(color=><button key={color} className={player?.color===color?'chosen':''} aria-label={`Use ${color} background`} aria-pressed={player?.color===color} style={{'--swatch':color}} onClick={()=>onProfile({color})}/>)}</div></div>
     <div className="profile-code"><span>ROOM CODE</span><b>{room.id}</b><button onClick={copyCode}>Copy</button></div>
     <button role="menuitem" onClick={()=>{onInvite();onClose()}}>↗ Invite friends</button>
-    <button role="menuitem" onClick={()=>{onSettings();onClose()}}>⚙ Table settings</button>
+    {isHost&&<button role="menuitem" onClick={()=>{onSettings();onClose()}}>⚙ Table settings</button>}
     <button role="menuitem" onClick={()=>{onTheme();onClose()}}>{theme==='dark'?'☼ Use light mode':'☾ Use dark mode'}</button>
   </div></>;
 }

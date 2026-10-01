@@ -10,7 +10,18 @@ export default function LedgerDialog({ open, entries = [], onClose }) {
         <time dateTime={entry.timestamp}>{new Date(entry.timestamp).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit' })}</time>
         <b>{entry.playerName}</b><span>{entry.description}</span>
         {entry.details?.cards?.length>0&&<small>{entry.details.cards.join(' · ')}</small>}
+        {entry.details?.count!==undefined&&!entry.details?.cards?.length&&<small>{entry.details.count} {entry.details.count===1?'card':'cards'} recorded</small>}
+        {entry.details?.layout&&<small>Layout: {entry.details.layout}</small>}
         {entry.details?.recipients&&<small>To: {entry.details.recipients.join(', ')}</small>}
+        {entry.details?.sources?.length>0&&<small>From: {entry.details.sources.join(', ')}</small>}
+        {entry.details?.source&&<small>From: {entry.details.source}</small>}
+        {entry.details?.destination&&<small>To: {entry.details.destination}</small>}
+        {entry.details?.stack&&<small>Stack: {entry.details.stack}</small>}
+        {entry.details?.position&&<small>Position: {Math.round(entry.details.position.x)}%, {Math.round(entry.details.position.y)}%</small>}
+        {entry.details?.message&&<small>Message: {entry.details.message}</small>}
+        {entry.details?.messageAuthor&&<small>Message from: {entry.details.messageAuthor}</small>}
+        {(entry.details?.emoji||entry.details?.color)&&<small>Profile: {[entry.details.emoji,entry.details.color].filter(Boolean).join(' · ')}</small>}
+        {entry.details?.settings&&<small>Settings: {Object.entries(entry.details.settings).map(([key,value])=>`${key} ${String(value)}`).join(' · ')}</small>}
       </article>) : <div className="ledger-empty">No actions recorded yet.</div>}</div>
       <footer><span>{entries.length} recorded {entries.length===1?'action':'actions'}</span><button className="primary-button" onClick={onClose}>Done</button></footer>
     </section>

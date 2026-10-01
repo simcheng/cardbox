@@ -289,3 +289,332 @@
 @media(prefers-reduced-motion:reduce){
   .app-shell .sidebar,.app-shell .playing-card,.app-shell .pile-zone{scroll-behavior:auto;transition-duration:.01ms!important;}
 }
+
+/* Focus the tabletop controls and keep history/profile tools usable on narrow screens. */
+.chat-top-button{display:flex;position:relative;align-items:center;gap:7px;border:1px solid #e1e6de;border-radius:8px;padding:8px 11px;background:#f9faf6;color:#315740;font-size:11px;font-weight:700}
+.chat-top-button:hover{background:#edf3eb}
+.chat-top-button .chat-unread{position:absolute;right:-6px;top:-7px;display:grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border-radius:10px;background:#bd605a;color:white;font-size:9px;font-style:normal}
+.app-shell .table-hand-zone .hand-zone-header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.app-shell .hand-visibility-toggle{grid-column:2;grid-row:1;justify-self:center;border:1px solid #ffffff30;border-radius:7px;padding:7px 11px;background:#ffffff12;color:#f4f1e8;font-size:10px;font-weight:700;white-space:nowrap}
+.app-shell .hand-tools{grid-column:3;grid-row:1;justify-self:end}
+.app-shell .table-hand-label{grid-column:1;grid-row:1}
+.app-shell .hand-tools .hand-draw{min-height:36px}
+.reaction-picker-wrap{position:relative;display:inline-flex}
+.reaction-picker-trigger{width:27px;height:25px;border:1px solid #e6e9e2;border-radius:14px;background:#f6f8f4;color:#607965;font-size:14px}
+.reaction-picker{position:absolute;z-index:35;right:0;bottom:calc(100% + 7px);display:grid;grid-template-columns:repeat(5,32px);gap:3px;width:max-content;max-width:min(250px,75vw);padding:7px;border:1px solid #e4e9e2;border-radius:10px;background:#fff;box-shadow:0 10px 30px #10291c28}
+.reaction-picker button{min-width:30px;min-height:30px;border:0;border-radius:6px;background:transparent;font-size:17px}
+.reaction-picker button:hover{background:#edf3eb}
+.reaction-other-form{grid-column:1/-1;display:flex;gap:5px;padding-top:5px}
+.reaction-other-form input{width:145px;min-width:0;border:1px solid #dfe7dd;border-radius:6px;padding:6px 7px;color:#34483a;font-size:11px}
+.reaction-other-form button{background:#245a41;color:#fff;font-size:10px}
+.profile-customize{padding:11px 8px;border-bottom:1px solid #e9ede6}
+.profile-customize>label{display:block;margin:0 0 6px;color:#87948a;font-size:8px;font-weight:700;letter-spacing:1px}
+.profile-emoji-options,.profile-color-options{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px}
+.profile-emoji-options button{width:27px;height:27px;border:1px solid transparent;border-radius:7px;background:#f2f4ef;font-size:15px}
+.profile-emoji-options button.chosen,.profile-color-options button.chosen{outline:2px solid #5c916a;outline-offset:1px}
+.profile-color-options button{width:19px;height:19px;border:2px solid white;border-radius:50%;background:var(--swatch);box-shadow:0 0 0 1px #cdd5ca}
+.discard-pile .playing-card{filter:grayscale(.82) saturate(.35) opacity(.68)}
+.discard-pile .pile-label{color:#e5e9e3}
+.app-shell .playing-card.card-back .back-pattern{background:radial-gradient(circle at 50% 46%,#397258 0 2px,transparent 2.5px),radial-gradient(circle at 50% 50%,#285840 0 38%,#1d4936 72%);border:1px solid #a8c1a9;box-shadow:inset 0 0 0 3px #1d4936,inset 0 0 0 4px #73977a;color:#e2eadc;text-shadow:0 1px 3px #102d20}
+.app-shell[data-theme="dark"] .chat-top-button{border-color:#405047;background:#29372e;color:#e2eee3}
+.app-shell[data-theme="dark"] .reaction-picker{border-color:#405047;background:#1e2c23}
+.app-shell[data-theme="dark"] .reaction-picker button:hover{background:#2c3d31}
+.app-shell[data-theme="dark"] .reaction-other-form input{border-color:#405047;background:#17231b;color:#e6eee7}
+.app-shell[data-theme="dark"] .profile-customize{border-color:#3a4b3e}
+.ledger-modal{width:min(100%,560px);max-height:min(82dvh,760px);display:flex;flex-direction:column;padding:22px;border:1px solid #e2e8df;border-radius:14px;background:#fbfaf6;color:#304638;box-shadow:0 20px 80px #091b1480}
+.ledger-modal>header,.ledger-modal>footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ledger-modal h2{margin:5px 0 0;font:700 21px Manrope,sans-serif}
+.ledger-modal .eyebrow{color:#72917b}
+.ledger-intro{margin:12px 0;color:#87948a;font-size:11px}
+.ledger-list{min-height:0;overflow:auto;border-top:1px solid #e8ece5}
+.ledger-entry{display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:11px 3px;border-bottom:1px solid #ebeee8;font-size:11px}
+.ledger-entry time{grid-column:1/-1;color:#89958a;font-size:9px}
+.ledger-entry b{color:#526c59}
+.ledger-entry span{grid-column:1/-1}
+.ledger-entry small{grid-column:1/-1;color:#78887b;font-size:9px;overflow-wrap:anywhere}
+.ledger-empty{padding:25px;text-align:center;color:#89958a;font-size:12px}
+.ledger-modal>footer{padding-top:12px;color:#87948a;font-size:10px}
+.ledger-modal>footer .primary-button{flex:none;min-height:34px}
+.reset-confirm{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:5px;padding:7px;border-radius:7px;background:#f5f0e8;color:#705d48;font-size:10px}
+.reset-confirm button{border:0;border-radius:5px;padding:7px;background:#e9ddd1;color:#604433;font-size:10px}
+.reset-confirm button:last-child{background:transparent;color:#65756a}
+.app-shell[data-theme="dark"] .ledger-modal{border-color:#405047;background:#1d2922;color:#e2eee3}
+.app-shell[data-theme="dark"] .ledger-entry,.app-shell[data-theme="dark"] .ledger-list{border-color:#35453a}
+.app-shell[data-theme="dark"] .reset-confirm{background:#342d23;color:#e4cbaa}
+@media(max-width:700px){
+  .app-shell .top-actions{gap:5px}
+  .chat-top-button{padding:7px 9px;font-size:10px}
+  .app-shell .table-hand-zone .hand-zone-header{grid-template-columns:auto 1fr auto;gap:5px}
+  .app-shell .table-hand-label{font-size:8px}
+  .app-shell .hand-visibility-toggle{grid-column:2;justify-self:center;padding:6px 8px;font-size:9px}
+  .app-shell .hand-tools{grid-column:3;gap:4px}
+  .app-shell .hand-tools button{padding:6px 7px;font-size:9px}
+}
+@media(max-width:430px){
+  .app-shell .brand{font-size:0!important;gap:0!important}
+  .app-shell .brand-mark{font-size:17px!important}
+  .app-shell .topbar{gap:8px}
+  .chat-top-button{padding:7px}
+  .chat-top-button span{display:none}
+  .app-shell .table-hand-zone .hand-zone-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px}
+  .app-shell .table-hand-label{grid-column:1;grid-row:1}
+  .app-shell .hand-visibility-toggle{grid-column:2;grid-row:1;justify-self:center;padding:6px 7px}
+  .app-shell .hand-tools{grid-column:1/-1;grid-row:2;justify-self:stretch;justify-content:center}
+  .app-shell .hand-tools .hand-draw{min-width:94px}
+}
+
+/* New table overlays use the same bounded, scrollable dialog treatment. */
+.dialog-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;overflow-y:auto;padding:18px;background:#14251fbb;overscroll-behavior:contain}
+.ledger-modal{min-width:0;width:min(100%,560px);max-height:min(82dvh,760px);overflow:hidden}
+.ledger-modal>header,.ledger-modal>footer{flex:none}
+.ledger-list{width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.ledger-entry{min-width:0}
+.ledger-entry b,.ledger-entry span,.ledger-entry small{min-width:0;overflow-wrap:anywhere}
+.reset-confirm{grid-template-columns:minmax(0,1fr) auto auto;}
+.reset-confirm>span{min-width:0;line-height:1.35;overflow-wrap:anywhere}
+.reaction-picker{max-height:min(55dvh,360px);overflow:auto;overscroll-behavior:contain}
+.reaction-other-form input{flex:1;width:auto;}
+.profile-customize{min-width:0}
+.profile-avatar{background:transparent!important;border:0!important;box-shadow:none!important;color:var(--body-text,#526457);font-size:19px;}
+.profile-emoji-options,.profile-color-options{row-gap:6px}
+.discard-pile .pile-label small{color:#d1d8d1}
+.app-shell[data-theme="dark"] .discard-pile .pile-label{color:#d9dfd9}
+@media(max-width:700px){
+  .dialog-backdrop{place-items:center;padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .ledger-modal{width:100%;max-height:calc(100dvh - 24px - env(safe-area-inset-bottom));padding:16px;border-radius:12px}
+  .ledger-modal h2{font-size:19px}
+  .ledger-entry{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:9px 2px;font-size:10px}
+  .ledger-entry time{font-size:8px}
+  .reset-confirm{grid-template-columns:minmax(0,1fr) auto auto;gap:4px;padding:6px}
+  .reset-confirm button{padding:7px 6px;font-size:9px;white-space:nowrap}
+  .reaction-picker{right:0;max-width:min(250px,calc(88vw - 36px));grid-template-columns:repeat(5,minmax(28px,32px));}
+  .reaction-other-form input{min-width:0}
+  .profile-popover{width:min(248px,calc(100vw - 18px));}
+}
+@media(max-width:430px){
+  .app-shell .chat-top-button{width:32px;height:32px;justify-content:center;padding:0}
+  .app-shell .top-actions{gap:4px}
+  .reset-confirm{grid-template-columns:minmax(0,1fr) auto;}
+  .reset-confirm>span{grid-column:1/-1}
+  .reaction-picker{grid-template-columns:repeat(5,30px);gap:2px;padding:6px}
+  .reaction-picker button{min-width:28px;min-height:28px}
+}
+@media(max-width:700px) and (max-height:520px){
+  .dialog-backdrop{padding:8px}
+  .ledger-modal{max-height:calc(100dvh - 16px);padding:12px}
+  .ledger-intro{margin:7px 0;font-size:10px}
+  .ledger-entry{padding:7px 2px}
+  .reaction-picker{max-height:45dvh}
+  .app-shell .profile-popover{top:54px;max-height:calc(100dvh - 62px);}
+}
+
+/* Final control layout pass: centered, padded controls and viewport-bounded overlays. */
+.app-shell .topbar{padding-inline:clamp(12px,2.2vw,28px);gap:clamp(10px,1.8vw,24px);}
+.app-shell .top-actions{gap:clamp(5px,1vw,10px);}
+.app-shell .top-actions>*{flex:none;}
+.app-shell .chat-top-button,.app-shell .top-actions .subtle-button,.app-shell .top-actions .icon-button{min-height:36px;}
+.app-shell .table-hand-zone .hand-zone-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;padding-inline:4px;}
+.app-shell .table-hand-label{min-width:0;padding-inline:4px;}
+.app-shell .hand-visibility-toggle{min-height:34px;padding:7px 12px;}
+.app-shell .hand-tools{min-width:0;gap:6px;padding-inline:2px;}
+.app-shell .hand-tools button{min-height:34px;padding:7px 10px;}
+.app-shell .toolbar{left:50%;right:auto;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 10px;}
+.app-shell .deck-menu-toggle,.app-shell .tool-undo{min-height:36px;padding:8px 11px;}
+.app-shell .toolbar-actions{align-items:center;gap:5px;}
+.app-shell .toolbar-actions>.tool-secondary,.app-shell .toolbar-actions .tool-more{min-height:36px;padding:8px 10px;}
+.app-shell .tool-dropdown{position:relative;}
+.app-shell .extra-menu{position:absolute;z-index:40;right:0;left:auto;width:min(270px,calc(100vw - 16px));min-width:min(220px,calc(100vw - 16px));max-width:calc(100vw - 16px);max-height:min(72dvh,560px);overflow-y:auto;overscroll-behavior:contain;}
+.app-shell .extra-menu.opens-up{top:auto;bottom:calc(100% + 8px);}
+.app-shell .extra-menu.opens-down{top:calc(100% + 8px);bottom:auto;}
+.app-shell .extra-menu button{min-height:38px;padding:9px 11px;}
+.app-shell .deal-all-row{align-items:center;}
+.app-shell .deal-all-row input,.app-shell .deal-all-row>button{min-height:38px;}
+.app-shell .action-menu{position:fixed;top:calc(60px + 8px);right:12px;left:auto;width:min(270px,calc(100vw - 24px));max-height:calc(100dvh - 84px);overflow-y:auto;overscroll-behavior:contain;}
+.app-shell .profile-popover{max-height:calc(100dvh - 84px);overflow-y:auto;overscroll-behavior:contain;}
+.app-shell .table-context-menu{max-height:calc(100dvh - 16px);overflow-y:auto;overscroll-behavior:contain;}
+.app-shell .modal-shade,.app-shell .dialog-backdrop{position:fixed;inset:0;z-index:45;display:grid;place-items:center;overflow:auto;padding:clamp(8px,2vh,20px);overscroll-behavior:contain;}
+.app-shell .settings-modal,.app-shell .invite-modal,.app-shell .ledger-modal{width:min(100%,560px);max-height:calc(100dvh - 2 * clamp(8px,2vh,20px));overflow-y:auto;overscroll-behavior:contain;}
+@media(max-width:900px){
+  .app-shell .toolbar{gap:6px;padding:7px;}
+  .app-shell .deck-menu-toggle{padding-inline:8px;}
+  .app-shell .toolbar-actions>.tool-secondary,.app-shell .toolbar-actions .tool-more{padding-inline:7px;}
+}
+@media(max-width:700px){
+  .app-shell .action-dock .toolbar{left:calc(50% - 20px);right:auto;bottom:calc(2% + 151px);width:min(calc(100vw - 66px),500px);max-width:calc(100vw - 66px);transform:translate(calc(-50% + var(--toolbar-drag-x,0px)),var(--toolbar-drag-y,0px));justify-content:space-between;gap:4px;padding:5px;}
+  .app-shell .action-dock>.tool-undo{right:9px;bottom:calc(2% + 151px);padding:7px 8px;}
+  .app-shell .deck-status{display:none;}
+  .app-shell .deck-menu-toggle{flex:none;max-width:none;min-height:36px;padding:7px 9px;}
+  .app-shell .toolbar-actions{flex:1;min-width:0;justify-content:flex-end;gap:3px;}
+  .app-shell .toolbar-actions>.tool-secondary,.app-shell .toolbar-actions .tool-more{flex:none;min-width:32px;min-height:36px;padding:7px 6px;}
+  .app-shell .toolbar-actions .tool-secondary label{display:none;}
+  .app-shell .tool-undo{flex:none;min-height:36px;padding:7px 9px;}
+  .app-shell .extra-menu{position:fixed;top:auto;right:8px;bottom:calc(env(safe-area-inset-bottom) + 8px);left:auto;width:min(320px,calc(100vw - 16px));min-width:0;max-width:calc(100vw - 16px);max-height:min(72dvh,560px);padding:10px;border-radius:14px;}
+  .app-shell .extra-menu.opens-up,.app-shell .extra-menu.opens-down{top:auto;bottom:calc(env(safe-area-inset-bottom) + 8px);}
+  .app-shell .extra-menu button{min-height:42px;padding:11px;}
+  .app-shell .action-menu{top:calc(54px + 8px);right:8px;max-height:calc(100dvh - 70px);}
+  .app-shell .table-hand-zone .hand-zone-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:5px;padding-inline:0;}
+  .app-shell .hand-visibility-toggle{justify-self:center;min-height:34px;padding:6px 9px;}
+  .app-shell .hand-tools{gap:4px;padding:0;}
+  .app-shell .hand-tools button{min-height:34px;padding:6px 8px;}
+  .app-shell .modal-shade,.app-shell .dialog-backdrop{padding:10px;padding-bottom:max(10px,env(safe-area-inset-bottom));}
+  .app-shell .settings-modal,.app-shell .invite-modal,.app-shell .ledger-modal{width:100%;max-height:calc(100dvh - 20px - env(safe-area-inset-bottom));padding:18px;}
+}
+@media(max-width:430px){
+  .app-shell .topbar{padding-inline:9px;gap:6px;}
+  .app-shell .top-actions{gap:3px;}
+  .app-shell .top-actions .chat-top-button,.app-shell .top-actions .theme-toggle,.app-shell .top-actions .invite-button,.app-shell .profile-control>.avatar{width:32px;height:32px;min-height:32px;padding:0;display:grid;place-items:center;}
+  .app-shell .top-actions .invite-button{font-size:15px;}
+  .app-shell .table-hand-zone .hand-zone-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:3px;}
+  .app-shell .table-hand-label{font-size:7px;letter-spacing:.7px;}
+  .app-shell .hand-visibility-toggle{padding-inline:6px;font-size:8px;}
+  .app-shell .hand-tools{grid-column:1/-1;grid-row:2;justify-self:center;max-width:100%;}
+  .app-shell .hand-tools button{padding-inline:6px;font-size:8px;}
+  .app-shell .hand-tools .hand-draw{min-width:94px;}
+  .app-shell .table-hand-zone{padding-top:5px;}
+  .app-shell .table-hand-zone.hand-collapsed{min-height:46px;height:46px;}
+}
+@media(max-width:700px) and (max-height:520px){
+  .app-shell .action-dock .toolbar{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 120px);}
+  .app-shell .action-dock>.tool-undo{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 120px);}
+  .app-shell .table-hand-zone{bottom:max(6px,env(safe-area-inset-bottom));min-height:92px;padding-top:4px;}
+  .app-shell .table-hand-zone.hand-collapsed{height:42px;min-height:42px;}
+  .app-shell .table-hand-cards{min-height:64px;padding-top:4px;padding-bottom:2px;}
+  .app-shell .table-hand-cards .playing-card{height:56px;width:40px;flex-basis:40px;margin-left:-21px;}
+  .app-shell .table-hand-cards .playing-card:first-child{margin-left:0;}
+  .app-shell .toolbar button{min-height:30px;padding-block:5px;}
+  .app-shell .hand-tools button{min-height:28px;padding-block:4px;}
+  .app-shell .action-menu{top:56px;max-height:calc(100dvh - 64px);}
+}
+
+/* Scrupulous pass: guard the small, conditional controls and clipped table edges. */
+.welcome{min-height:100dvh;overflow-x:hidden;overflow-y:auto;}
+.welcome-card{flex:none;}
+.create-form>*{min-width:0;}
+.invite-code{min-width:0;}
+.invite-code b{min-width:0;overflow-wrap:anywhere;}
+.app-shell .sidebar{display:flex;flex-direction:column;height:100dvh;}
+.app-shell .chat-feed{flex:1 1 auto;min-height:0;max-height:none;overscroll-behavior:contain;}
+.app-shell .players-box{flex:none;max-height:28dvh;overflow-y:auto;overscroll-behavior:contain;}
+.app-shell .player-row{min-width:0;}
+.app-shell .player-row>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.app-shell .player-hand-count{flex:none;white-space:nowrap;}
+.app-shell .seat{max-width:min(240px,42vw);min-width:0;}
+.app-shell .seat>span:not(.seat-notification){min-width:0;max-width:12ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.app-shell .seat-count{flex:none;white-space:nowrap;gap:3px;padding:2px 4px;}
+.app-shell .pile-zone{max-width:calc(100% - 12px);}
+.app-shell .pile-menu-button,.app-shell .pile-grab{touch-action:none;}
+.app-shell .pile-menu-button::before,.app-shell .pile-grab::before{content:'';position:absolute;inset:-9px;border-radius:50%;}
+.app-shell .pile-menu-button{z-index:12;}
+.app-shell .pile-grab{z-index:11;}
+.app-shell .stack-count{right:0;top:13px;bottom:auto;}
+.app-shell .selection-box{position:absolute;z-index:1;border:1px solid #f1dc8a;background:#f1dc8a24;box-shadow:0 0 0 1px #102f2480;pointer-events:none;}
+.app-shell .table-hand-cards{padding-top:19px;}
+.app-shell .table-hand-zone.hand-collapsed .hand-zone-header{min-height:34px;}
+.app-shell .hand-visibility-toggle,.app-shell .hand-tools button,.app-shell .toolbar button{touch-action:manipulation;}
+.app-shell .toolbar{will-change:left,top;}
+.app-shell .toolbar-drag-handle{display:grid;place-items:center;flex:none;width:28px;min-height:36px;border:1px solid #ffffff30;border-radius:7px;background:#ffffff10;color:#e1ede1;cursor:grab;touch-action:none;user-select:none;}
+.app-shell .toolbar-drag-handle:active{cursor:grabbing;}
+.app-shell .toolbar-drag-handle{position:relative;}
+.app-shell .action-dock{position:absolute;z-index:12;inset:0;pointer-events:none;}
+.app-shell .action-dock .toolbar{pointer-events:auto;left:calc(50% - 24px);max-width:calc(100vw - 84px);transform:translate(calc(-50% + var(--toolbar-drag-x,0px)),var(--toolbar-drag-y,0px));}
+.app-shell .action-dock>.tool-undo{position:absolute;right:22px;bottom:20px;z-index:13;pointer-events:auto;min-height:36px;padding:8px 11px;}
+.app-shell .toolbar.is-dragging{z-index:25;cursor:grabbing;user-select:none;transition:none!important;}
+.app-shell .toolbar.is-dragging *{transition:none!important;}
+.app-shell .toolbar.is-dragging .toolbar-drag-handle{cursor:grabbing;background:#ffffff27;}
+.app-shell .extra-menu,.app-shell .action-menu,.app-shell .profile-popover,.app-shell .table-context-menu{overscroll-behavior:contain;}
+.app-shell .extra-menu{max-height:min(var(--menu-max-height,72dvh),72dvh,560px);overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;}
+.app-shell .extra-menu button{min-height:40px;}
+.app-shell .extra-menu .deal-all-row{min-width:0;}
+.app-shell .extra-menu .deal-all-row>button{min-width:0;white-space:normal;line-height:1.25;}
+.app-shell .extra-menu .reset-confirm{min-width:0;}
+.app-shell .selection-menu-label{padding:9px 10px 5px;border-top:1px solid #edf0e9;color:#859287;font-size:9px;font-weight:700;}
+.app-shell[data-theme="dark"] .selection-menu-label{border-color:#39483d;color:#aebdaf;}
+.app-shell .placement-confirm button{min-height:40px;padding-inline:12px;}
+.app-shell .table-context-menu{top:clamp(8px,var(--menu-y),calc(100dvh - min(70dvh,520px) - 8px));left:clamp(8px,var(--menu-x),calc(100vw - 232px));max-height:min(70dvh,520px);}
+.app-shell .toast{max-width:calc(100vw - 24px);white-space:normal;text-align:center;overflow-wrap:anywhere;bottom:max(18px,env(safe-area-inset-bottom));}
+@media(max-width:700px){
+  .welcome{min-height:100dvh;padding:18px 12px;}
+  .welcome-card{width:min(100%,448px);margin:28px 0 18px;padding:32px 22px 22px;}
+  .welcome .site-foot{margin-top:auto;padding-bottom:max(4px,env(safe-area-inset-bottom));}
+  .app-shell .table-hand-cards{padding-top:19px;}
+  .app-shell .pile-menu-button{left:1px;top:1px;}
+  .app-shell .pile-grab{right:1px;top:1px;}
+  .app-shell .stack-count{right:1px;top:12px;}
+  .app-shell .selection-box{border-width:2px;}
+  .app-shell .toolbar-drag-handle{width:26px;min-height:34px;}
+  .app-shell .sidebar{height:100dvh;padding-bottom:env(safe-area-inset-bottom);}
+  .app-shell .players-box{max-height:24dvh;}
+  .app-shell .table-context-menu{top:auto;right:8px;bottom:calc(10px + env(safe-area-inset-bottom));left:8px;width:auto;max-width:none;max-height:min(70dvh,560px);}
+}
+@media(max-width:430px){
+  .welcome-card{padding:27px 18px 19px;}
+  .welcome h1{font-size:40px;}
+  .create-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,.72fr);gap:8px;margin-top:12px;}
+  .welcome .create-form>input,.welcome select.deck-choice{width:100%;}
+  .welcome .primary-button{grid-column:1/-1;min-height:42px;}
+  .app-shell .seat{max-width:39vw;gap:3px;}
+  .app-shell .seat>span:not(.seat-notification){max-width:8ch;font-size:7px;}
+  .app-shell .seat-count{gap:2px;padding:1px 3px;font-size:8px!important;}
+  .app-shell .seat-count b{min-width:14px;height:14px;font-size:8px;}
+  .app-shell .seat-count .hand-card-icon{display:none;}
+  .app-shell .table-hand-cards{padding-top:18px;}
+  .app-shell .hand-tools{flex-wrap:wrap;}
+  .app-shell .toolbar-drag-handle{width:24px;}
+  .app-shell .invite-modal{padding:24px 17px;}
+  .app-shell .invite-code b{font-size:16px;letter-spacing:1px;}
+}
+@media(max-width:700px) and (max-height:520px){
+  .welcome{justify-content:flex-start;}
+  .welcome-card{margin:18px 0 12px;padding:22px 20px 16px;}
+  .welcome h1{font-size:34px;margin:10px 0;}
+  .intro{margin-bottom:14px;}
+  .welcome-foot{margin-top:14px;padding-top:10px;}
+  .app-shell .table-hand-cards{padding-top:18px;}
+  .app-shell .table-hand-zone{min-height:108px;}
+  .app-shell .table-hand-zone.hand-collapsed{min-height:44px;height:44px;}
+  .app-shell .toolbar{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 120px);}
+  .app-shell .sidebar{height:100dvh;}
+  .app-shell .players-box{max-height:22dvh;}
+  .app-shell .table-context-menu{max-height:min(72dvh,360px);}
+}
+@media(min-width:701px) and (max-height:540px){
+  .app-shell .sidebar{height:100dvh;}
+  .app-shell .players-box{max-height:22dvh;}
+  .app-shell .extra-menu,.app-shell .action-menu,.app-shell .table-context-menu{max-height:calc(100dvh - 16px);}
+}
+/* Keep the separate undo action paired with the dock after all responsive overrides. */
+@media(max-width:700px){
+  .app-shell .action-dock .toolbar{left:calc(50% - 20px);right:auto;bottom:calc(2% + 151px);width:min(calc(100vw - 66px),500px);max-width:calc(100vw - 66px);transform:translate(calc(-50% + var(--toolbar-drag-x,0px)),var(--toolbar-drag-y,0px));}
+  .app-shell .action-dock>.tool-undo{right:9px;bottom:calc(2% + 151px);}
+}
+@media(max-width:700px) and (max-height:520px){
+  .app-shell .action-dock .toolbar{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 120px);}
+  .app-shell .action-dock>.tool-undo{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 120px);}
+}
+.reaction-picker{grid-template-columns:repeat(5,36px);gap:3px;width:max-content;max-width:calc(100vw - 16px);box-sizing:border-box;}
+.reaction-picker button{min-width:36px;min-height:36px;}
+.reaction-picker{max-height:calc(100dvh - 16px);overflow:auto;overscroll-behavior:contain;}
+.reaction-picker .reaction-other-form{min-width:0;}
+.reaction-picker .reaction-other-form input{flex:1;min-width:0;width:auto;}
+.app-shell .extra-menu.opens-up{top:auto;bottom:calc(100% + 8px);}
+.app-shell .extra-menu.opens-down{top:calc(100% + 8px);bottom:auto;}
+.app-shell .reaction-picker-trigger{min-width:36px;min-height:36px;}
+.reaction-picker.theme-dark{border-color:#405047;background:#1e2c23;color:#e2eee3;}
+.reaction-picker.theme-dark button:hover{background:#2c3d31;}
+.reaction-picker.theme-dark .reaction-other-form input{border-color:#405047;background:#17231b;color:#e6eee7;}
+.app-shell .reaction-picker button{min-width:36px;min-height:36px;}
+.app-shell .chat-composer button{width:40px;min-height:40px;flex:none;}
+.app-shell .sidebar-close{width:40px;height:40px;}
+.app-shell .profile-emoji-options button{width:34px;height:34px;}
+.app-shell .profile-color-options button{width:28px;height:28px;}
+.app-shell .profile-code button,.app-shell .invite-code button{min-height:36px;padding-inline:10px;}
+.app-shell .hand-visibility-toggle{min-height:38px;}
+.app-shell .table-context-menu button{min-height:40px;}
+.app-shell .placement-confirm button{min-height:40px;}
+@media(max-width:430px){
+  .app-shell .hand-visibility-toggle{min-height:36px;}
+  .app-shell .reaction-picker-trigger,.app-shell .reaction-picker button{min-width:34px;min-height:34px;}
+  .app-shell .profile-emoji-options button{width:32px;height:32px;}
+  .app-shell .profile-color-options button{width:26px;height:26px;}
+  .app-shell .table-hand-zone.hand-collapsed{height:auto;min-height:82px;max-height:none;overflow:visible;padding-bottom:5px;}
+}
