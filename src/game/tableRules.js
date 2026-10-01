@@ -1,0 +1,19 @@
+export const TABLE_GRID = Object.freeze({ x: 3.5, y: 7.5 });
+export const TABLE_BOUNDS = Object.freeze({ x: [6, 94], y: [18, 78] });
+export const PILE_SNAP_DISTANCE = 66;
+
+export function snapToTable(clientX, clientY, rect) {
+  const x = Math.min(TABLE_BOUNDS.x[1], Math.max(TABLE_BOUNDS.x[0], (clientX - rect.left) / rect.width * 100));
+  const y = Math.min(TABLE_BOUNDS.y[1], Math.max(TABLE_BOUNDS.y[0], (clientY - rect.top) / rect.height * 100));
+  return { x: Math.round(x / TABLE_GRID.x) * TABLE_GRID.x, y: Math.round(y / TABLE_GRID.y) * TABLE_GRID.y, mode: 'grid' };
+}
+
+export function resolveTablePlacement(clientX, clientY, rect, nearbyPiles = [], preferredPileId = null) {
+  const nearby = nearbyPiles.map((pile) => ({ ...pile, distance: Math.hypot(clientX - (pile.rect.left + pile.rect.width / 2), clientY - (pile.rect.top + pile.rect.height / 2)) })).sort((a,b) => a.distance - b.distance)[0];
+  const target = preferredPileId ? nearbyPiles.find((pile) => pile.id === preferredPileId) : nearby?.distance < PILE_SNAP_DISTANCE ? nearby : null;
+  if (target) {
+    const fan = clientX > target.rect.left + target.rect.width * .62;
+    return { x: fan ? target.x + 3 : target.x, y: target.y, targetId: target.id, mode: fan ? 'fan' : 'stack' };
+  }
+  return snapToTable(clientX, clientY, rect);
+}
