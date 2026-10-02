@@ -1,6 +1,6 @@
 # Cardtable
 
-A live, freeform card table for game night. The first deck is a standard 52-card deck; deck definitions are data-driven in `shared/deckDefinitions.js` so additional suits, ranks, or deck types can be added independently of the table UI.
+Cardtable is a live, freeform card table for desktop and mobile browsers. It starts with a standard 52-card deck, private hands, guest names, table chat, and invite links. Deck definitions are data-driven in `shared/deckDefinitions.js` so new decks can be added without tying their rules to the table UI.
 
 ## Run locally
 
@@ -11,39 +11,56 @@ npm install
 npm run dev
 ```
 
-Open the Vite address shown in the terminal. The client uses Socket.IO to connect to the Node service on port 3000.
+Open the Vite URL printed in the terminal. Vite serves the client on port 5173 and the Express/Socket.IO server listens on port 3000. The client connects to that local server automatically.
+
+To create a production build locally:
+
+```sh
+npm run build
+NODE_ENV=production npm start
+```
+
+The server serves `dist/` when `NODE_ENV=production` and reads its listening port from `PORT`. In PowerShell, set the variable with `$env:NODE_ENV="production"` before running `npm start`.
 
 ## Play
 
-- Create a table, choose a guest name, and share the invite link or room code.
-- The deck starts face down. Draw, shuffle, cut, deal one, deal five, or deal one to each player.
-- Your hand sits in an overlapping card zone on the felt. Other seats show each player's hand count.
-- Drag a card onto empty felt to preview and place it on the grid. Drop close to another placed card to stack or fan it. Tap to select, then tap a felt position to place it.
-- Drag a card over your hand to return it; the floating card preview and highlighted hand zone show the drop target. Sort or reorder cards in your hand.
-- Open card actions with right-click, a touch hold, or a pile's three-dot menu. Flip cards, move them to your hand or discard, return them to the deck, fan or square up stacks, and remove empty piles.
-- Move the deck and other piles with the dotted grip. Stack counts stay visible on the felt, and seats show illustrated hand counts.
-- Shuffle, cut, draw, and deal actions give the table a short visual cue for everyone.
-- Undo the last card or table action. Chat messages show a short-lived speech bubble at the sender's seat and support quick emoji reactions.
-- Invite friends opens a dialog with a copyable link and room code, plus the device's native share menu where available.
-- Use the moon/sun button to switch between light and dark themes. Chat opens from the Chat button and starts closed.
-- Chat is live for everyone in the room.
-- The host can set whether hands are private and whether card actions are host-only.
+- Create a table or join with an invite link or room code. Guest names are made unique automatically.
+- The deck starts face down. Draw a card, deal a chosen number to yourself or everyone, and shuffle from the deck controls.
+- Your hand is visible in an overlapping zone at the bottom of the felt. The table shows each other player's hand count.
+- Drag cards onto the felt to place them. A placement preview appears while dragging; dropping places immediately. Cards dropped from your hand form a fan. Drop onto an existing stack or fan to add cards, insert into a fan, or create another fan layer.
+- Select cards with click, Shift-click, Control-click or Command-click, or drag a selection box. Drag a selection as one group. The deck's selection box selects only its top card.
+- Drag cards or whole stacks into your hand. Sort hands and table piles by suit or rank.
+- Right-click a card or pile, hold a card on touch screens, or open its menu for actions such as flip, move, return to deck/discard, rename, sort, fan, and separate fan layers. Empty table piles are removed automatically.
+- Move piles by their dotted handle. Double-click a pile's handle to switch between fan and stack layouts.
+- Use the table actions menu to add a shared pile or open the action history. Undo is available at the lower left; the chat button opens the initially hidden chat panel.
+- Chat supports emoji reactions and short-lived table notifications. The host can promote cohosts and change hand visibility or host-only card controls in settings.
+- Switch between light and dark themes in settings.
 
-On phones, tap-to-select works alongside drag and drop. The chat opens from the floating Chat button.
+On touch devices, drag cards to move them, tap to select, and hold a card to open its actions. Layout and controls adapt to the available screen space.
 
 ## Deploy to Render
 
-1. Push this repository to GitHub and create a Render **Web Service** from it.
-2. Render can use the included `render.yaml`; the service uses `npm install && npm run build` and `npm start` and listens on Render's `PORT`.
-3. Keep one service instance for the in-memory lobby prototype. No environment variables are required.
-4. Render's service URL can be used directly, or add a custom domain to the service in Render.
+The repository includes a Render Blueprint in `render.yaml`.
 
-The `/health` endpoint returns JSON for Render health checks. The Socket.IO connection upgrades to WebSocket when available and falls back to polling.
+1. In Render, choose **New → Blueprint** and connect `https://github.com/simcheng/cardbox` (or select the connected repository).
+2. Review the Blueprint before applying it. It creates one Node web service named `cardtable`, runs `npm install && npm run build`, starts with `npm start`, and uses `/health` for its health check. The Blueprint currently selects Render's `starter` plan; change the plan in `render.yaml` if you want a different size or billing tier.
+3. Wait for the first deploy, then check `https://<your-service>.onrender.com/health` for `{"ok":true}`. Open the service URL and create a table to confirm the UI and Socket.IO connection work.
+4. Keep one service instance for this prototype. Lobby and chat data live in process memory; a restart or deploy clears active tables. Multiple instances need shared room storage and a Socket.IO adapter before they can serve the same tables. Render can interrupt WebSocket sessions during deploys or maintenance; clients reconnect, but in-memory tables do not survive an instance replacement.
 
-## Cloudflare DNS
+The app has no required environment variables beyond `NODE_ENV=production`, which is set by the Blueprint. Render assigns `PORT` automatically. The server binds to `0.0.0.0` and accepts Socket.IO WebSocket upgrades on the same port as HTTP.
 
-For a custom domain, add it to Cloudflare and set the registrar nameservers to Cloudflare. In Render, add the hostname to the web service and follow Render's domain verification instructions. In Cloudflare DNS, create the DNS record Render specifies (commonly a CNAME to the Render hostname) and enable the proxy after verification. Set Cloudflare SSL/TLS to **Full (strict)**. WebSockets are supported by Cloudflare; do not cache the application HTML or `/socket.io/` traffic.
+## Use a Cloudflare domain
 
-## Prototype limits
+First deploy the Render service and note its `onrender.com` hostname. If the domain is registered elsewhere, change its nameservers to the nameservers Cloudflare gives you.
 
-Lobby state is held in the Node process memory. Empty rooms remain available for 45 minutes after their last player disconnects, and a player can reclaim their seat using the browser's session storage. A service restart or deploy clears active tables. Run one Render instance; multiple instances need shared state and a Socket.IO adapter before they can host the same rooms.
+1. In the Render service's **Settings → Custom Domains**, add the hostname you plan to use, such as `play.example.com` or `example.com`.
+2. In Cloudflare **DNS → Records**, create a CNAME pointing that hostname to the Render service hostname. For an apex/root hostname, Cloudflare can flatten the CNAME. Remove conflicting `AAAA` records; Render's custom-domain guide currently calls these out as a source of routing problems.
+3. Leave the CNAME **DNS only** (gray cloud) while Render verifies the domain and issues its TLS certificate. Follow the DNS values shown in the Render dashboard, then click **Verify** in Render.
+4. After the certificate is issued, optionally turn on Cloudflare proxying (orange cloud). Set Cloudflare **SSL/TLS** to **Full (strict)** once the Render origin certificate is valid for the custom hostname. Cloudflare supports proxied WebSockets; enable **Network → WebSockets** if it is disabled. Do not add cache rules for `/socket.io/` or the app's HTML page.
+5. Test the custom domain in a browser, then open a table in two browser sessions to check realtime updates through the proxy.
+
+For the provider-specific sequence and current DNS requirements, see [Render's Cloudflare DNS guide](https://render.com/docs/configure-cloudflare-dns), [Render custom domains](https://render.com/docs/custom-domains), [Render WebSockets](https://render.com/docs/websocket), and [Cloudflare WebSockets](https://developers.cloudflare.com/network/websockets/).
+
+## State and capacity
+
+Rooms are held in server memory. An empty room is retained for 45 minutes after its last update; an offline player can reclaim their identity for 15 minutes. Each room allows up to 12 concurrent players and retains up to 32 player identities before reclaiming sufficiently old offline seats. Reclaimed players' cards are moved to discard. A server restart or deploy clears active rooms. Persistent room storage is not configured.
