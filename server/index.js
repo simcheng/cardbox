@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
     if(typeof done!=='function')done=()=>{};
     if(!payload||typeof payload!=='object'||Array.isArray(payload))return done({ok:false,error:'Invalid table details.'});
     const { roomId, playerName, playerId, playerToken }=payload;
-    if(roomId!==undefined&&typeof roomId!=='string'||playerName!==undefined&&typeof playerName!=='string'||playerId!==undefined&&typeof playerId!=='string'||playerToken!==undefined&&typeof playerToken!=='string')return done({ok:false,error:'Invalid table details.'});
+    if(roomId!==undefined&&typeof roomId!=='string'||playerName!==undefined&&typeof playerName!=='string'||playerId!=null&&typeof playerId!=='string'||playerToken!=null&&typeof playerToken!=='string')return done({ok:false,error:'Invalid table details.'});
     const room = getRoom(String(roomId || '').toUpperCase());
     if (!room) return done({ ok: false, error: 'That table has closed or does not exist.' });
     const currentIdentity=room.players.get(playerId);
