@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
 import HandZone from './components/HandZone.jsx';
@@ -16,6 +16,7 @@ import './style.css';
 
 const socket = io(import.meta.env.DEV ? (import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000') : undefined, { autoConnect: true });
 const playerKey = (room) => `cardtable:${room}:player`;
+const playerTokenKey = (room) => `cardtable:${room}:token`;
 const initialRoom = new URLSearchParams(location.search).get('room');
 
 function App() {
@@ -24,7 +25,7 @@ function App() {
   const [roomName, setRoomName] = useState('Friday night cards');
   const [deckId, setDeckId] = useState('standard-52');
   const [roomCode, setRoomCode] = useState(initialRoom || '');
-  const [error, setError] = useState(''), [selected, setSelected] = useState([]), [selectionBox, setSelectionBox] = useState(null);
+  const [error, setError] = useState(''), [selected, setSelected] = useState([]), [selectedPileIds,setSelectedPileIds]=useState([]), [selectionBox, setSelectionBox] = useState(null);
   const [menu, setMenu] = useState(''), [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -35,8 +36,9 @@ function App() {
   const [handCollapsed, setHandCollapsed] = useState(false), [pileDrag, setPileDrag] = useState(null);
   const [contextMenu, setContextMenu] = useState(null), [cue, setCue] = useState(null);
   const chatEnd = useRef(null), touchStart = useRef(null), cardPointer = useRef(null), selectionPointer = useRef(null), ignoreClick = useRef(false), tableRef = useRef(null), tableActionsButtonRef=useRef(null),tableActionsMenuRef=useRef(null);
+  const activeRoomIdRef=useRef(initialRoom||'');
   const [tableActionsStyle,setTableActionsStyle]=useState({});
-  const cardMoveFrame = useRef(null), pileMoveFrame = useRef(null);
+  const cardMoveFrame = useRef(null), pileMoveFrame = useRef(null), dragCleanupTimer=useRef(null), dragGhostRef=useRef(null),dragLatestPositionRef=useRef(null);
   const viewerRef = useRef(playerId), chatOpenRef = useRef(mobilePanel);
   viewerRef.current=playerId; chatOpenRef.current=mobilePanel;
   const self = room?.players.find((p) => p.id === playerId);
@@ -48,8 +50,9 @@ function App() {
   const deck = room?.piles.find((p) => p.id === 'deck');
   const previewCard = dragCard || pendingPlacement?.cards?.[0]?.card;
   const selectedIds = selected.map((item)=>item.card.id);
-  function clearSelection() { setSelected([]); }
-  function clearDragVisual(){setDragCard(null);setDraggedCardIds([]);setDragCount(1);setDragPosition(null);setDragOverHand(false);}
+  function clearSelection() { setSelected([]);setSelectedPileIds([]); }
+  function clearDragVisual(){if(dragCleanupTimer.current)clearTimeout(dragCleanupTimer.current);dragCleanupTimer.current=null;dragLatestPositionRef.current=null;setDragCard(null);setDraggedCardIds([]);setDragCount(1);setDragPosition(null);setDragOverHand(false);}
+  useLayoutEffect(()=>{const point=dragLatestPositionRef.current;if(point&&dragGhostRef.current){dragGhostRef.current.style.left=`${point.x}px`;dragGhostRef.current.style.top=`${point.y}px`;}});
   function moveSelection(toId, cards = selected, onComplete) {
     if (!cards.length) return;
     action('move-cards',{cards:cards.map(({card,pileId})=>({cardId:card.id,fromId:pileId})),toId},onComplete);
@@ -57,14 +60,14 @@ function App() {
   }
   function placeSelection(spot, cards = selected, onComplete) {
     if (!spot || !cards.length) return;
-    action('place-cards',{cards:cards.map(({card,pileId})=>({cardId:card.id,fromId:pileId})),x:spot.x,y:spot.y,targetId:spot.targetId,mode:spot.mode},onComplete);
+    action('place-cards',{cards:cards.map(({card,pileId})=>({cardId:card.id,fromId:pileId})),x:spot.x,y:spot.y,targetId:spot.targetId,mode:spot.mode,insertAt:spot.insertAt,fanGroup:spot.fanGroup},onComplete);
     clearSelection(); setPreview(null); setPendingPlacement(null);
   }
   function setColorTheme(next) { setTheme(next); localStorage.setItem('cardtable:theme', next); }
 
-  function pileAtPoint(clientX,clientY,excludeIds=[],stopAtExcluded=false) {
+  function pileAtPoint(clientX,clientY,excludeIds=[],stopAtExcluded=false,layersOverride=null) {
     const excluded=new Set(excludeIds);
-    const layers=document.elementsFromPoint?.(clientX,clientY)||[document.elementFromPoint(clientX,clientY)].filter(Boolean);
+    const layers=layersOverride||document.elementsFromPoint?.(clientX,clientY)||[document.elementFromPoint(clientX,clientY)].filter(Boolean);
     for(const layer of layers){
       const element=layer.closest?.('.pile-zone');
       if(element&&excluded.has(element.dataset.placeId)&&stopAtExcluded)return null;
@@ -78,8 +81,9 @@ function App() {
 
   useEffect(() => {
     const join = () => {
-      if (!initialRoom || !name.trim()) return;
-      socket.emit('room:join', { roomId: initialRoom, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(initialRoom)) }, (r) => {
+      const roomId=activeRoomIdRef.current;
+      if (!roomId || !name.trim()) return;
+      socket.emit('room:join', { roomId, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(roomId)), playerToken:sessionStorage.getItem(playerTokenKey(roomId)) }, (r) => {
         if (r.ok) applyRoom(r); else setError(r.error);
       });
     };
@@ -103,6 +107,8 @@ function App() {
 
   function applyRoom(r) {
     setRoom(r.room); setPlayerId(r.playerId); sessionStorage.setItem(playerKey(r.roomId), r.playerId);
+    if(r.playerToken)sessionStorage.setItem(playerTokenKey(r.roomId),r.playerToken);
+    activeRoomIdRef.current=r.roomId;
     sessionStorage.setItem('cardtable:name', name.trim());
     history.replaceState({}, '', `${location.pathname}?room=${r.roomId}`); setError('');
   }
@@ -112,7 +118,7 @@ function App() {
   }
   function join() {
     if (!name.trim()) return setError('Add a name to join the table.');
-    socket.emit('room:join', { roomId: roomCode, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(roomCode.toUpperCase())) }, (r) => r.ok ? applyRoom(r) : setError(r.error));
+    socket.emit('room:join', { roomId: roomCode, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(roomCode.toUpperCase())), playerToken:sessionStorage.getItem(playerTokenKey(roomCode.toUpperCase())) }, (r) => r.ok ? applyRoom(r) : setError(r.error));
   }
   const action = (type, extra = {}, onComplete) => socket.emit('table:action', { type, ...extra }, (r) => { if (!r?.ok && r?.error) setToast(r.error); onComplete?.(r); });
   useEffect(()=>{
@@ -133,21 +139,28 @@ function App() {
   },[menu,isHost,canPlay]);
   function copyInvite() { setInviteOpen(true); }
   function openContextMenu(event, target) {
+    if(target.quickLayout){event.preventDefault();const pile=room?.piles.find(item=>item.id===target.pileId);if(pile?.kind==='tableau')action('pile:layout',{pileId:pile.id,layout:pile.layout==='fan'?'stack':'fan'});return;}
     const rect = event.currentTarget?.getBoundingClientRect?.();
-    setContextMenu({ ...target, x: event.clientX || rect?.left + rect?.width/2 || 12, y: event.clientY || rect?.bottom || 80 });
+    const belongsToSelection=(target.cardId&&selected.some(item=>item.card.id===target.cardId))||(target.pileId&&selectedPileIds.includes(target.pileId));
+    const selectionCards=belongsToSelection?selected.filter(item=>!selectedPileIds.includes(item.pileId)):[];
+    const selectionPiles=belongsToSelection?selectedPileIds:[];
+    setContextMenu({ ...target, selectionCards, selectionPiles, x: event.clientX || rect?.left + rect?.width/2 || 12, y: event.clientY || rect?.bottom || 80 });
   }
   function sendChat(e) { e.preventDefault(); if (chatText.trim()) { action('chat', { message: chatText }); setChatText(''); } }
   function toggleChat() { const opening=!mobilePanel; setMobilePanel(opening); if(opening)setUnreadChat(0); }
   function prepareSelectionPlacement(cards,spot) {
     if (!spot || !cards.length) return;
-    setPendingPlacement({cards,spot}); setDragCard(null); setPreview(spot); clearSelection();
+    placeSelection(spot,cards);
   }
   function onCardClick(card, pileId, event) {
     if (ignoreClick.current) { ignoreClick.current = false; return; }
     if (!canPlay) return setToast('The host controls this table.');
     const isSelected = selected.some(item=>item.card.id===card.id);
     if (event?.ctrlKey || event?.metaKey) {
-      setSelected(current=>isSelected?current.filter(item=>item.card.id!==card.id):[...current,{card,pileId}]);
+      // A whole pile and one of its cards are mutually exclusive selection
+      // units. Ctrl-clicking into a selected pile switches to card selection.
+      setSelectedPileIds(current=>current.filter(id=>id!==pileId));
+      setSelected(current=>isSelected?current.filter(item=>item.card.id!==card.id):[...current.filter(item=>item.pileId!==pileId||item.card.id!==card.id),{card,pileId}]);
       return;
     }
     if (event?.shiftKey) {
@@ -157,6 +170,7 @@ function App() {
       const end = pile?.cards.findIndex(item=>item.id===card.id) ?? -1;
       if (pile && start>=0 && end>=0) {
         const range = pile.cards.slice(Math.min(start,end),Math.max(start,end)+1).map(item=>({card:item,pileId}));
+        setSelectedPileIds(current=>current.filter(id=>id!==pileId));
         setSelected(current=>[...current.filter(item=>item.pileId!==pileId),...range]);
       } else setSelected(current=>current.some(item=>item.card.id===card.id)?current:[...current,{card,pileId}]);
       return;
@@ -168,20 +182,34 @@ function App() {
       else moveSelection(pileId);
       return;
     }
-    setSelected([{ card, pileId }]);
+    setSelected([{ card, pileId }]);setSelectedPileIds([]);
+  }
+  function capturePlacementGeometry(){
+    const surface=tableRef.current;if(!surface)return null;
+    const rect=surface.getBoundingClientRect(),piles=new Map();
+    for(const zone of surface.querySelectorAll('.tableau-zone')){
+      const pile=room?.piles.find(item=>item.id===zone.dataset.placeId);if(!pile)continue;
+      const box=zone.getBoundingClientRect();
+      const cards=[...zone.querySelectorAll('.playing-card')].map((element,index)=>{const cardBox=element.getBoundingClientRect();return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,index:Number(element.style.getPropertyValue('--fan'))||index,rect:{left:cardBox.left,right:cardBox.right,top:cardBox.top,bottom:cardBox.bottom}};});
+      piles.set(pile.id,{rect:{left:box.left,right:box.right,top:box.top,bottom:box.bottom,width:box.width,height:box.height},cards});
+    }
+    return {width:rect.width,height:rect.height,updatedAt:room?.updatedAt,piles};
   }
   function placementAt(clientX,clientY,movingCards=null) {
     if (!tableRef.current) return;
     const tableRect = tableRef.current.getBoundingClientRect();
     if (clientX < tableRect.left || clientX > tableRect.right || clientY < tableRect.top || clientY > tableRect.bottom) return null;
     const layers=document.elementsFromPoint?.(clientX,clientY)||[document.elementFromPoint(clientX,clientY)].filter(Boolean);
-    const hitElement=layers[0];
+    const hitElement=layers.find(element=>!element.closest?.('.drag-ghost'));
     if(hitElement?.closest('.table-hand-zone,.seat,.toolbar,.action-dock,.placement-confirm,.placement-preview,.table-context-menu,.sidebar,button,input,select,textarea'))return null;
     const moving=movingCards||(cardPointer.current?.cards||[]);
     const movingByPile=new Map();
     for(const item of moving)movingByPile.set(item.pileId,(movingByPile.get(item.pileId)||0)+1);
     const sourceIds=[...movingByPile].filter(([id,count])=>count>=(room?.piles.find(pile=>pile.id===id)?.cards.length||Infinity)).map(([id])=>id);
-    const pileHit=pileAtPoint(clientX,clientY,sourceIds,true);
+    const active=cardPointer.current;
+    if(active?.dragging&&active.geometry&&(active.geometry.width!==tableRect.width||active.geometry.height!==tableRect.height||active.geometry.left!==tableRect.left||active.geometry.top!==tableRect.top||active.geometry.updatedAt!==room?.updatedAt))active.geometry=capturePlacementGeometry();
+    const geometry=movingCards&&active?.geometry;
+    const pileHit=pileAtPoint(clientX,clientY,sourceIds,true,layers);
     const rawPile=hitElement?.closest('.pile-zone');
     if(rawPile&&sourceIds.includes(rawPile.dataset.placeId))return null;
     if(rawPile&&!pileHit)return null;
@@ -189,10 +217,7 @@ function App() {
     if(hitPile&&!hitPile.classList.contains('tableau-zone'))return null;
     if(hitPile&&sourceIds.includes(hitPile.dataset.placeId))return null;
     const hitId = hitPile?.dataset.placeId;
-    const piles=hitId?room.piles.filter(pile=>pile.id===hitId&&!sourceIds.includes(pile.id)).map(pile=>({...pile,rect:hitPile.getBoundingClientRect()})):[...document.querySelectorAll('.tableau-zone')].map((element)=>{
-      const pile=room.piles.find(item=>item.id===element.dataset.placeId);
-      return pile&&!sourceIds.includes(pile.id)?{...pile,rect:element.getBoundingClientRect()}:null;
-    }).filter(Boolean);
+    const piles=hitId?room.piles.filter(pile=>pile.id===hitId&&!sourceIds.includes(pile.id)).map(pile=>({...pile,rect:geometry?.piles.get(hitId)?.rect||hitPile.getBoundingClientRect()})):[];
     const directHit = hitId ? piles.filter((pile) => pile.id === hitId) : piles;
     const spot=resolveTablePlacement(clientX, clientY, tableRect, directHit, hitId);
     if(!spot?.targetId)return spot;
@@ -200,11 +225,29 @@ function App() {
     if(!target)return spot;
     const centerX=(target.rect.left+target.rect.width/2-tableRect.left)/tableRect.width*100;
     const centerY=(target.rect.top+target.rect.height/2-tableRect.top)/tableRect.height*100;
-    return {...spot,x:Math.min(94,Math.max(6,centerX+(spot.mode==='fan'?3:0))),y:centerY};
+    let previewX=spot.previewX,previewY=spot.previewY,insertAt=spot.insertAt,fanGroup=spot.fanGroup;
+    if(spot.mode==='insert'){
+      const cards=geometry?.piles.get(hitId)?.cards||[...hitPile.querySelectorAll('.playing-card')].map((element,index)=>{const rect=element.getBoundingClientRect();return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,index:Number(element.style.getPropertyValue('--fan'))||index,rect};});
+      const movingIds=new Set(moving.map(item=>item.card.id));
+      const originalGroups=[...new Set(cards.map(item=>item.group))].sort((a,b)=>a-b);
+      const groups=target.layout==='fan-stack'?originalGroups.filter(group=>cards.some(item=>item.group===group&&!movingIds.has(item.id))):originalGroups;
+      if(cards.length){
+        let selectedGroup=null;
+        if(target.layout==='fan-stack'){const bounds=new Map();for(const item of cards){if(movingIds.has(item.id))continue;const b=bounds.get(item.group)||{left:Infinity,right:-Infinity};b.left=Math.min(b.left,item.rect.left);b.right=Math.max(b.right,item.rect.right);bounds.set(item.group,b);}selectedGroup=groups.sort((a,b)=>Math.abs(clientX-(bounds.get(a).left+bounds.get(a).right)/2)-Math.abs(clientX-(bounds.get(b).left+bounds.get(b).right)/2))[0];fanGroup=originalGroups.indexOf(selectedGroup);}
+        const allOrdered=cards.filter(item=>target.layout!=='fan-stack'||item.group===selectedGroup).sort((a,b)=>a.index-b.index);
+        const ordered=allOrdered.filter(item=>!movingIds.has(item.id));
+        const postRemovalAt=ordered.filter(item=>clientX>(item.rect.left+item.rect.right)/2).length;
+        insertAt=postRemovalAt;
+        const before=ordered[postRemovalAt],after=ordered[postRemovalAt-1];
+        previewX=before?before.rect.left:after?.rect.right??spot.previewX;
+        previewY=before?(before.rect.top+before.rect.bottom)/2:after?(after.rect.top+after.rect.bottom)/2:spot.previewY;
+      }
+    }
+    return {...spot,insertAt,fanGroup,x:Math.min(94,Math.max(6,centerX+(spot.mode==='fan'?3:0))),y:centerY,previewX:(previewX-tableRect.left)/tableRect.width*100,previewY:(previewY-tableRect.top)/tableRect.height*100};
   }
   function previewAt(e,movingCards=null) {
     const spot = placementAt(e.clientX,e.clientY,movingCards);
-    setPreview(current=>current&&spot&&current.mode===spot.mode&&current.targetId===spot.targetId&&Math.abs(current.x-spot.x)<.25&&Math.abs(current.y-spot.y)<.25?current:spot||null);
+    setPreview(current=>current&&spot&&current.mode===spot.mode&&current.targetId===spot.targetId&&current.insertAt===spot.insertAt&&current.fanGroup===spot.fanGroup&&Math.abs((current.previewX??-1)-(spot.previewX??-1))<.5&&Math.abs((current.previewY??-1)-(spot.previewY??-1))<.5&&Math.abs(current.x-spot.x)<.25&&Math.abs(current.y-spot.y)<.25?current:spot||null);
     return spot;
   }
   function onTableClick(e) {
@@ -227,14 +270,14 @@ function App() {
     const group = selected.find(item=>item.card.id===card.id) ? selected : [{card,pileId:fromId}];
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     cardMoveFrame.current = null;
-    cardPointer.current = { card, fromId, cards:group, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, latest: null };
+    cardPointer.current = { card, fromId, cards:group, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, latest: null, geometry:null };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onCardPointerMove(e) {
     const active = cardPointer.current;
     if (!active || active.pointerId !== e.pointerId) return;
     if (!active.dragging && Math.hypot(e.clientX-active.startX,e.clientY-active.startY) > 7) {
-      active.dragging = true; setDragCard(active.card); setDraggedCardIds(active.cards.map(item=>item.card.id)); setDragCount(active.cards.length);setDragPosition({x:e.clientX,y:e.clientY,card:active.card});
+      active.dragging = true; setDragCard(active.card); setDraggedCardIds(active.cards.map(item=>item.card.id)); setDragCount(active.cards.length);dragLatestPositionRef.current={x:e.clientX,y:e.clientY};setDragPosition({x:e.clientX,y:e.clientY,card:active.card});active.geometry=capturePlacementGeometry();
     }
     if (active.dragging) {
       e.preventDefault();
@@ -246,8 +289,8 @@ function App() {
           const point = active.latest;
           const target = document.elementFromPoint(point.clientX,point.clientY);
           const overHand = !!target?.closest('.table-hand-zone');
-          setDragPosition({x:point.clientX,y:point.clientY,card:active.card});
-          setDragOverHand(overHand);
+          dragLatestPositionRef.current={x:point.clientX,y:point.clientY};if(dragGhostRef.current){dragGhostRef.current.style.left=`${point.clientX}px`;dragGhostRef.current.style.top=`${point.clientY}px`;}
+          setDragOverHand(current=>current===overHand?current:overHand);
           if (overHand) setPreview(null); else previewAt(point,active.cards);
         });
       }
@@ -260,6 +303,8 @@ function App() {
     cardMoveFrame.current = null;
     cardPointer.current = null;
     if (active.dragging) {
+      if(dragCleanupTimer.current)clearTimeout(dragCleanupTimer.current);
+      dragCleanupTimer.current=setTimeout(clearDragVisual,5000);
       const handTarget = document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-hand-zone');
       if (handTarget) {
         const handId = myHand?.id || `hand-${playerId}`;
@@ -346,7 +391,7 @@ function App() {
         if(target.kind==='tableau'){
           const targetElement=[...tableRef.current.querySelectorAll('.tableau-zone')].find(element=>element.dataset.placeId===target.id);
           const spot=targetElement?resolveTablePlacement(e.clientX,e.clientY,active.bounds,[{...target,rect:targetElement.getBoundingClientRect()}],target.id):null;
-          action('move-stack',{fromId:active.pile.id,toId:target.id,mode:spot?.mode||'stack'},()=>setPileDrag(null));
+          action('move-stack',{fromId:active.pile.id,toId:target.id,mode:spot?.mode==='insert'?'fan-stack':spot?.mode||'stack'},()=>setPileDrag(null));
         }else action('move-stack',{fromId:active.pile.id,toId:target.id},()=>setPileDrag(null));
         ignoreClick.current=true;setTimeout(()=>{ignoreClick.current=false;},250);return;
       }
@@ -387,9 +432,19 @@ function App() {
     selectionPointer.current=null;
     if (gesture.moved) {
       const box={left:Math.min(gesture.startX,gesture.x),right:Math.max(gesture.startX,gesture.x),top:Math.min(gesture.startY,gesture.y),bottom:Math.max(gesture.startY,gesture.y)};
-      const hits=[...tableRef.current.querySelectorAll('.playing-card:not(.drag-source)')].filter((element)=>{const rect=element.getBoundingClientRect();return rect.right>=box.left&&rect.left<=box.right&&rect.bottom>=box.top&&rect.top<=box.bottom;});
-      const found=hits.map((element)=>{const cardId=element.dataset.cardId;const pile=room.piles.find(item=>item.cards.some(card=>card.id===cardId));const card=pile?.cards.find(item=>item.id===cardId);return card&&pile?{card,pileId:pile.id}:null;}).filter(Boolean);
-      setSelected(current=>gesture.add?[...current.filter(item=>!found.some(hit=>hit.card.id===item.card.id)),...found]:found);
+      const hits=[...tableRef.current.querySelectorAll('.playing-card:not(.drag-source)')].filter((element)=>{const pile=room.piles.find(p=>p.id===element.closest('.pile-zone')?.dataset.placeId);if(pile?.id==='deck'&&pile.cards.at(-1)?.id!==element.dataset.cardId)return false;const rect=element.getBoundingClientRect();return rect.right>=box.left&&rect.left<=box.right&&rect.bottom>=box.top&&rect.top<=box.bottom;});
+      const wholePiles=[...tableRef.current.querySelectorAll('.tableau-zone')].filter(element=>{const rect=element.getBoundingClientRect();return rect.left>=box.left&&rect.right<=box.right&&rect.top>=box.top&&rect.bottom<=box.bottom;}).map(element=>element.dataset.placeId);
+      const found=hits.filter(element=>!wholePiles.includes(element.closest('.pile-zone')?.dataset.placeId)).map((element)=>{const cardId=element.dataset.cardId;const pile=room.piles.find(item=>item.cards.some(card=>card.id===cardId));const card=pile?.cards.find(item=>item.id===cardId);return card&&pile?{card,pileId:pile.id}:null;}).filter(Boolean);
+      const nextPileIds=gesture.add?new Set(selectedPileIds):new Set();
+      if(gesture.add)for(const id of wholePiles)nextPileIds.has(id)?nextPileIds.delete(id):nextPileIds.add(id);
+      else for(const id of wholePiles)nextPileIds.add(id);
+      setSelectedPileIds([...nextPileIds]);
+      setSelected(current=>{
+        const next=gesture.add?new Map(current.map(item=>[item.card.id,item])):new Map();
+        if(gesture.add)for(const hit of found)next.has(hit.card.id)?next.delete(hit.card.id):next.set(hit.card.id,hit);
+        else for(const hit of found)next.set(hit.card.id,hit);
+        return [...next.values()].filter(item=>!nextPileIds.has(item.pileId));
+      });
       setSelectionBox(null); ignoreClick.current=true; setTimeout(()=>{ignoreClick.current=false;},250);
     } else setSelectionBox(null);
   }
@@ -436,10 +491,10 @@ function App() {
   const handZone = <HandZone hand={myHand} playerId={playerId} canPlay={canPlay} selectedIds={selectedIds} contextCardId={contextMenu?.cardId} dragCardIds={draggedCardIds} cue={cue} collapsed={handCollapsed} onToggle={()=>setHandCollapsed(!handCollapsed)} onDraw={()=>action('draw',{pileId:'deck'})} onSort={(mode)=>action('sort-hand',{mode})} onCardClick={onCardClick} onOpenContextMenu={openContextMenu} onPointerDown={onCardPointerDown} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>
 
   return <main className={`app-shell ${cue?`cue-${cue.type.replace(':','-')}`:''}`} data-theme={theme}>
-    <header className="topbar"><a className="brand" href="/" onClick={(e)=>{e.preventDefault();history.pushState({},'',location.pathname);setRoom(null)}}><span className="brand-mark">♧</span> cardtable</a><div className="table-title"><span className="table-dot"/><div><b>{room.name}</b><small>{room.players.filter(p=>p.online).length} at the table</small></div></div><div className="top-actions"><button className="subtle-button invite-button" aria-label="Invite friends" onClick={()=>setInviteOpen(true)}>↗ <span>Invite friends</span></button><button className="icon-button settings-trigger" onClick={()=>setSettingsOpen(!settingsOpen)} aria-label="Settings">⚙</button><div className="profile-control"><button className={`avatar ${cue?.playerId===playerId?'action-actor':''}`} style={{'--avatar':self?.color}} title={self?.name} aria-label="Open profile menu" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</button><ProfileMenu open={profileOpen} player={self} isHost={isHost} isCohost={isCohost} isModerator={isModerator} room={room} onInvite={()=>setInviteOpen(true)} onSettings={()=>setSettingsOpen(true)} onProfile={(values)=>action('profile',values)} onClose={()=>setProfileOpen(false)} onToast={setToast}/></div></div></header>
+    <header className="topbar"><a className="brand" href="/" onClick={(e)=>{e.preventDefault();socket.emit('room:leave');activeRoomIdRef.current='';history.pushState({},'',location.pathname);setRoom(null);setPlayerId('')}}><span className="brand-mark">♧</span> cardtable</a><div className="table-title"><span className="table-dot"/><div><b>{room.name}</b><small>{room.players.filter(p=>p.online).length} at the table</small></div></div><div className="top-actions"><button className="subtle-button invite-button" aria-label="Invite friends" onClick={()=>setInviteOpen(true)}>↗ <span>Invite friends</span></button><button className="icon-button settings-trigger" onClick={()=>setSettingsOpen(!settingsOpen)} aria-label="Settings">⚙</button><div className="profile-control"><button className={`avatar ${cue?.playerId===playerId?'action-actor':''}`} style={{'--avatar':self?.color}} title={self?.name} aria-label="Open profile menu" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</button><ProfileMenu open={profileOpen} player={self} isHost={isHost} isCohost={isCohost} isModerator={isModerator} room={room} onInvite={()=>setInviteOpen(true)} onSettings={()=>setSettingsOpen(true)} onProfile={(values)=>action('profile',values)} onClose={()=>setProfileOpen(false)} onToast={setToast}/></div></div></header>
     <button className="chat-fab" onClick={toggleChat} aria-expanded={mobilePanel} aria-label={mobilePanel?'Close chat':'Open chat'} title="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10.2h-8.2l-4.6 3v-3H4.5z"/></svg>{unreadChat>0&&<i>{unreadChat}</i>}</button>
     <div className="game-layout"><section className="play-area"><div className="table-heading"><div><span className="eyebrow light">THE TABLE</span><h2>Make yourself at home.</h2></div><div className="table-tools"><button ref={tableActionsButtonRef} className="more-button" aria-expanded={menu==='actions'} aria-label="Table actions" onClick={()=>setMenu(menu==='actions'?'':'actions')}><span>•••</span></button>{menu==='actions'&&<div ref={tableActionsMenuRef} style={tableActionsStyle} className="popover action-menu table-actions-menu"><b>Table actions</b>{canPlay&&<><button onClick={()=>{action('pile:create',{name:'New pile'});setMenu('')}}>＋ Add a pile</button><button onClick={()=>{action('shuffle',{pileId:'deck'});setMenu('')}}>↻ Shuffle the deck</button></>}<button onClick={()=>{setLedgerOpen(true);setMenu('')}}>◷ View action history</button>{isModerator&&<button onClick={()=>{setSettingsOpen(true);setMenu('')}}>⚙ Table settings</button>}</div>}</div></div>
-      <TableSurface room={room} playerId={playerId} tableRef={tableRef} selectedIds={selectedIds} selectionBox={selectionBox} preview={preview} previewCard={previewCard} previewCount={pendingPlacement?.cards?.length||dragCount} dragCount={dragCount} pileDrag={pileDrag} handZone={handZone} cue={cue} contextCardId={contextMenu?.cardId} dragCardId={dragCard?.id} draggedCardIds={draggedCardIds} dragPosition={dragPosition} dragOverHand={dragOverHand} onOpenContextMenu={openContextMenu} onSurfaceClick={onTableClick} onSurfacePointerDown={onSurfacePointerDown} onSurfacePointerMove={onSurfacePointerMove} onSurfacePointerUp={onSurfacePointerUp} onSurfacePointerCancel={onSurfacePointerCancel} onPileClick={onPileClick} onCardClick={onCardClick} onPilePointerDown={onPilePointerDown} onPilePointerMove={onPilePointerMove} onPilePointerUp={onPilePointerUp} onPilePointerCancel={onPilePointerCancel} onCardPointerDown={onCardPointerDown} onCardPointerMove={onCardPointerMove} onCardPointerUp={onCardPointerUp} onCardPointerCancel={onCardPointerCancel} onConfirmPlacement={commitPreview} onCancelPlacement={cancelPreview} pendingPlacement={pendingPlacement}/>
+      <TableSurface room={room} playerId={playerId} tableRef={tableRef} selectedIds={selectedIds} selectedPileIds={selectedPileIds} selectionBox={selectionBox} preview={preview} previewCard={previewCard} previewCount={pendingPlacement?.cards?.length||dragCount} dragCount={dragCount} pileDrag={pileDrag} handZone={handZone} cue={cue} contextCardId={contextMenu?.cardId} dragCardId={dragCard?.id} draggedCardIds={draggedCardIds} dragPosition={dragPosition} dragOverHand={dragOverHand} onOpenContextMenu={openContextMenu} onSurfaceClick={onTableClick} onSurfacePointerDown={onSurfacePointerDown} onSurfacePointerMove={onSurfacePointerMove} onSurfacePointerUp={onSurfacePointerUp} onSurfacePointerCancel={onSurfacePointerCancel} onPileClick={onPileClick} onCardClick={onCardClick} onPilePointerDown={onPilePointerDown} onPilePointerMove={onPilePointerMove} onPilePointerUp={onPilePointerUp} onPilePointerCancel={onPilePointerCancel} onCardPointerDown={onCardPointerDown} onCardPointerMove={onCardPointerMove} onCardPointerUp={onCardPointerUp} onCardPointerCancel={onCardPointerCancel} onConfirmPlacement={commitPreview} onCancelPlacement={cancelPreview} pendingPlacement={pendingPlacement} dragGhostRef={dragGhostRef}/>
       <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isModerator} selectedCount={selected.length} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
     </section></div>
     <ChatDrawer open={mobilePanel} room={room} playerId={playerId} text={chatText} setText={setChatText} onSend={sendChat} onReact={(messageId,emoji)=>action('chat:react',{messageId,emoji})} onClose={()=>setMobilePanel(false)} onInvite={copyInvite} chatEnd={chatEnd} theme={theme}/>

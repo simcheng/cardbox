@@ -34,6 +34,7 @@ function takeCards(room, playerId, selections) {
     if (!from || (from.kind==='hand' && from.ownerId!==playerId)) return null;
     const card = from.cards.find(item=>item.id===selection.cardId);
     if (!card) return null;
+    if(from.kind==='deck'&&(from.cards.at(-1)?.id!==card.id||cards.some(item=>item.from===from)))return null;
     cards.push({ card, from });
   }
   for (const {card,from} of cards) from.cards.splice(from.cards.findIndex(item=>item.id===card.id),1);
@@ -62,10 +63,10 @@ export function applyTableAction(room, playerId, payload = {}) {
   const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign'].includes(type) ? null : { piles: structuredClone(room.piles) };
 
   if (type === 'shuffle') {
-    const pile = findPile(room, payload.pileId || 'deck'); if (!pile) return reject();
+    const pile = findPile(room, 'deck'); if (!pile) return reject();
     pile.cards = shuffle(pile.cards);
   } else if (type === 'draw' || type === 'deal') {
-    const deck = findPile(room, payload.pileId || 'deck'); if (!deck?.cards.length) return reject('The deck is empty.');
+    const deck = findPile(room, 'deck'); if (!deck?.cards.length) return reject('The deck is empty.');
     const count = type === 'deal' ? Math.min(Math.max(Number(payload.count) || 1, 1), 13) : 1;
     const recipients = type === 'deal' && payload.toAll ? [...room.players.values()] : [room.players.get(playerId)];
     for (const recipient of recipients) {
@@ -80,6 +81,53 @@ export function applyTableAction(room, playerId, payload = {}) {
   } else if (type === 'sort-hand') {
     const hand = findPile(room, `hand-${playerId}`); if (!hand) return reject('Your hand is empty.');
     hand.cards = sortCards(hand.cards, payload.mode);
+  } else if (type === 'pile:sort') {
+    const pile=findPile(room,payload.pileId);
+    if(pile?.kind!=='tableau'||!['suit','rank'].includes(payload.mode))return reject('Choose a card stack and sort order.');
+    if(pile.layout==='fan-stack'&&pile.fanGroups?.length){
+      pile.fanGroups=pile.fanGroups.map(group=>sortCards(group.map(id=>pile.cards.find(card=>card.id===id)).filter(Boolean),payload.mode).map(card=>card.id));
+      const orderedIds=pile.fanGroups.flat();pile.cards=orderedIds.map(id=>pile.cards.find(card=>card.id===id)).filter(Boolean);
+    }else pile.cards=sortCards(pile.cards,payload.mode);
+  } else if(type==='selection:flip'){
+    if(payload.cards!==undefined&&!Array.isArray(payload.cards)||payload.pileIds!==undefined&&!Array.isArray(payload.pileIds))return reject('Choose available selected cards and piles.');
+    const cards=payload.cards||[],pileIds=[...new Set(payload.pileIds||[])],piles=pileIds.map(id=>findPile(room,id));
+    if(!cards.length&&!pileIds.length||pileIds.length!==(payload.pileIds||[]).length||piles.some(pile=>pile?.kind!=='tableau'))return reject('Choose available selected cards and piles.');
+    const pileCardIds=new Set(piles.flatMap(pile=>pile.cards.map(card=>card.id)));
+    if(cards.some(item=>pileCardIds.has(item.cardId))||new Set(cards.map(item=>item.cardId)).size!==cards.length)return reject('A selected card can only be flipped once.');
+    const selected=cards.map(selection=>({selection,pile:findPile(room,selection.fromId)}));
+    if(selected.some(({selection,pile})=>!pile||(pile.kind==='hand'&&pile.ownerId!==playerId)||!pile.cards.some(card=>card.id===selection.cardId)||(pile.kind==='deck'&&(pile.cards.at(-1)?.id!==selection.cardId||cards.filter(item=>item.fromId===pile.id).length>1))))return reject('One or more selected cards are no longer available.');
+    for(const {selection,pile} of selected){const card=pile.cards.find(item=>item.id===selection.cardId);card.faceUp=!card.faceUp;}
+    for(const pile of piles)for(const card of pile.cards)card.faceUp=!card.faceUp;
+  } else if(type==='selection:move'){
+    if(payload.cards!==undefined&&!Array.isArray(payload.cards)||payload.pileIds!==undefined&&!Array.isArray(payload.pileIds))return reject('Choose available selected cards and piles.');
+    const cards=payload.cards||[],pileIds=[...new Set(payload.pileIds||[])],piles=pileIds.map(id=>findPile(room,id));
+    if(!cards.length&&!pileIds.length||pileIds.length!==(payload.pileIds||[]).length||piles.some(pile=>pile?.kind!=='tableau'))return reject('Choose available selected cards and piles.');
+    const pileCardIds=new Set(piles.flatMap(pile=>pile.cards.map(card=>card.id)));
+    if(cards.some(item=>pileCardIds.has(item.cardId)))return reject('A selected pile already contains one of the selected cards.');
+    if(payload.toId!==`hand-${playerId}`&&!['deck','discard'].includes(payload.toId))return reject('Choose your hand, the deck, or discard.');
+    const taken=cards.length?takeCards(room,playerId,cards):{cards:[],sources:[]};
+    if(!taken)return reject('One or more selected cards are no longer available.');
+    const to=payload.toId===`hand-${playerId}`?ensureHand(room,playerId):findPile(room,payload.toId);
+    if(!to)return reject('Choose your hand, the deck, or discard.');
+    const moving=[...taken.cards,...piles.flatMap(pile=>pile.cards)];
+    for(const card of moving){if(to.kind==='hand'){card.ownerId=to.ownerId;card.faceUp=true;}else if(to.kind==='deck'){card.ownerId=null;card.faceUp=false;}else{card.ownerId=null;card.faceUp=true;}}
+    to.cards.push(...moving);
+    for(const source of taken.sources)if(source!==to)cleanupEmptyPile(room,source);
+    for(const pile of piles){pile.cards=[];delete pile.fanGroups;cleanupEmptyPile(room,pile);}
+  } else if(type==='pile:batch'){
+    const ids=[...new Set(payload.pileIds||[])],piles=ids.map(id=>findPile(room,id));
+    if(!ids.length||ids.length!==payload.pileIds?.length||piles.some(pile=>pile?.kind!=='tableau'))return reject('Choose valid selected card piles.');
+    if(payload.operation==='layout'&&['fan','stack'].includes(payload.layout)){
+      for(const pile of piles){pile.layout=payload.layout;delete pile.fanGroups;}
+    }else if(payload.operation==='sort'&&['suit','rank'].includes(payload.mode)){
+      for(const pile of piles){if(pile.layout==='fan-stack'&&pile.fanGroups?.length){pile.fanGroups=pile.fanGroups.map(group=>sortCards(group.map(id=>pile.cards.find(card=>card.id===id)).filter(Boolean),payload.mode).map(card=>card.id));pile.cards=pile.fanGroups.flat().map(id=>pile.cards.find(card=>card.id===id)).filter(Boolean);}else pile.cards=sortCards(pile.cards,payload.mode);}
+    }else if(payload.operation==='move'&&['hand','discard','deck'].includes(payload.to)){
+      const to=payload.to==='hand'?ensureHand(room,playerId):findPile(room,payload.to);
+      const cards=piles.flatMap(pile=>pile.cards);
+      for(const card of cards){card.ownerId=payload.to==='hand'?playerId:null;card.faceUp=payload.to!=='deck';}
+      to.cards.push(...cards);
+      for(const pile of piles){pile.cards=[];delete pile.fanGroups;cleanupEmptyPile(room,pile);}
+    }else return reject('Choose a valid action for the selected piles.');
   } else if (type === 'hand:reorder') {
     const hand = findPile(room, `hand-${playerId}`);
     if (!hand) return reject('Your hand is empty.');
@@ -98,7 +146,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     remaining.splice(beforeIndex<0?remaining.length:beforeIndex,0,...ordered);hand.cards=remaining;
   } else if (type === 'flip') {
     const pile = findPile(room, payload.pileId); const card = pile?.cards.find((item) => item.id === payload.cardId);
-    if (!card||(pile.kind==='hand'&&pile.ownerId!==playerId)) return reject('That card is no longer available.');
+    if (!card||(pile.kind==='hand'&&pile.ownerId!==playerId)||(pile.kind==='deck'&&pile.cards.at(-1)?.id!==card.id)) return reject('That card is no longer available.');
     card.faceUp = !card.faceUp;
   } else if (type === 'flip-top') {
     const pile = findPile(room, payload.pileId); const card = pile?.cards.at(-1);
@@ -108,7 +156,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     if (!Array.isArray(payload.cards)||!payload.cards.length) return reject('Choose one or more cards first.');
     if(new Set(payload.cards.map(item=>item.cardId)).size!==payload.cards.length)return reject('A selected card can only be flipped once.');
     const selected=payload.cards.map(selection=>({selection,pile:findPile(room,selection.fromId)}));
-    if (selected.some(({selection,pile})=>!pile||(pile.kind==='hand'&&pile.ownerId!==playerId)||!pile.cards.some(card=>card.id===selection.cardId))) return reject('One or more selected cards are no longer available.');
+    if (selected.some(({selection,pile})=>!pile||(pile.kind==='hand'&&pile.ownerId!==playerId)||!pile.cards.some(card=>card.id===selection.cardId)||(pile.kind==='deck'&&pile.cards.at(-1)?.id!==selection.cardId)||payload.cards.filter(item=>item.fromId===pile?.id).length>1)) return reject('One or more selected cards are no longer available.');
     for (const {selection,pile} of selected) pile.cards.find(card=>card.id===selection.cardId).faceUp=!pile.cards.find(card=>card.id===selection.cardId).faceUp;
   } else if (type === 'pile:layout') {
     const pile = findPile(room, payload.pileId);
@@ -133,7 +181,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     const from = findPile(room, payload.fromId);
     const index = from?.cards.findIndex((card) => card.id === payload.cardId) ?? -1;
     const deck = findPile(room, 'deck');
-    if (index < 0 || !deck||(from.kind==='hand'&&from.ownerId!==playerId)) return reject('That card is no longer available.');
+    if (index < 0 || !deck||(from.kind==='hand'&&from.ownerId!==playerId)||(from.kind==='deck'&&index!==from.cards.length-1)) return reject('That card is no longer available.');
     const [card] = from.cards.splice(index, 1); pruneFanGroups(from,[card.id]); card.ownerId = null; card.faceUp = false; deck.cards.push(card); cleanupEmptyPile(room, from);
   } else if (type === 'move-stack') {
     const from=findPile(room,payload.fromId);let to=findPile(room,payload.toId);
@@ -166,7 +214,7 @@ export function applyTableAction(room, playerId, payload = {}) {
   } else if (type === 'move-card') {
     const from = findPile(room, payload.fromId); let to = findPile(room, payload.toId);
     const index = from?.cards.findIndex((card) => card.id === payload.cardId) ?? -1;
-    if (index < 0 || (from?.kind==='hand'&&from.ownerId!==playerId)) return reject('Choose an available card and destination.');
+    if (index < 0 || (from?.kind==='hand'&&from.ownerId!==playerId)||(from?.kind==='deck'&&index!==from.cards.length-1)) return reject('Choose an available card and destination.');
     if (from === to) return reject('That card is already in this pile.');
     if (to?.kind==='tableau') return reject('Use placement to add cards to a table stack.');
     if(to?.kind==='hand'&&to.ownerId!==playerId)return reject('You can only move cards into your own hand.');
@@ -180,7 +228,7 @@ export function applyTableAction(room, playerId, payload = {}) {
   } else if (type === 'place') {
     const from = findPile(room, payload.fromId);
     const index = from?.cards.findIndex((card) => card.id === payload.cardId) ?? -1;
-    if (index < 0||(from.kind==='hand'&&from.ownerId!==playerId)) return reject('That card is no longer available.');
+    if (index < 0||(from.kind==='hand'&&from.ownerId!==playerId)||(from.kind==='deck'&&index!==from.cards.length-1)) return reject('That card is no longer available.');
     const mode = ['stack', 'fan', 'fan-stack'].includes(payload.mode) ? payload.mode : 'grid';
     const target = payload.targetId ? findPile(room, payload.targetId) : null;
     if (mode !== 'grid' && target?.kind !== 'tableau') return reject('Choose a card pile to stack onto.');
@@ -216,10 +264,14 @@ export function applyTableAction(room, playerId, payload = {}) {
     to.cards.push(...cards);
     for (const source of taken.sources) if (source!==to) cleanupEmptyPile(room,source);
   } else if (type === 'place-cards') {
-    const mode=['stack','fan','fan-stack'].includes(payload.mode)?payload.mode:'grid';
+    const mode=['stack','fan','fan-stack','insert'].includes(payload.mode)?payload.mode:'grid';
     const target=payload.targetId?findPile(room,payload.targetId):null;
     if (mode!=='grid'&&target?.kind!=='tableau') return reject('Choose a card pile to stack onto.');
+    if(mode==='insert'&&(!['fan','fan-stack'].includes(target.layout)))return reject('Choose a fan to insert cards into.');
     if (mode==='grid'&&(!Number.isFinite(Number(payload.x))||!Number.isFinite(Number(payload.y)))) return reject('Choose a place on the table first.');
+    const priorTargetCards=target?[...target.cards.map(card=>card.id)]:[];
+    const priorGroups=target?.layout==='fan-stack'?(target.fanGroups||[priorTargetCards]):null;
+    const requestedGroup=priorGroups?.[Math.max(0,Number(payload.fanGroup)||0)]||priorTargetCards;
     const taken=takeCards(room,playerId,payload.cards);
     if (!taken) return reject('One or more selected cards are no longer available.');
     const cards=taken.cards;
@@ -232,16 +284,26 @@ export function applyTableAction(room, playerId, payload = {}) {
       const layout=cards.length>1?(fromHand?'fan':'stack'):'grid';
       destination={id:`table-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:'',kind:'tableau',layout,x,y,cards:[]};
       room.piles.push(destination);
+    } else if(mode==='insert'&&target.layout==='fan-stack'){
+      target.fanGroups ||= priorGroups?.map(group=>group.filter(id=>target.cards.some(card=>card.id===id))).filter(group=>group.length)||[];
+      let groupIndex=target.fanGroups.findIndex(group=>group.some(id=>requestedGroup.includes(id)));
+      if(groupIndex<0){groupIndex=Math.min(target.fanGroups.length,Math.max(0,Number(payload.fanGroup)||0));target.fanGroups.splice(groupIndex,0,[]);}
+      const group=target.fanGroups[groupIndex];
+      const at=Math.min(group.length,Math.max(0,Number(payload.insertAt)||0));
+      const beforeId=group[at];const lastGroupIndex=target.cards.findIndex(card=>card.id===group.at(-1));const nextGroup=target.fanGroups[groupIndex+1]||[];const nextGroupIndex=target.cards.findIndex(card=>card.id===nextGroup[0]);const flatIndex=beforeId?target.cards.findIndex(card=>card.id===beforeId):lastGroupIndex<0?(nextGroupIndex<0?target.cards.length:nextGroupIndex):lastGroupIndex+1;
+      group.splice(at,0,...cards.map(card=>card.id));target.cards.splice(Math.max(0,flatIndex),0,...cards);
+    } else if(mode==='insert'){
+      const at=Math.min(destination.cards.length,Math.max(0,Number(payload.insertAt)||0));destination.cards.splice(at,0,...cards);
     } else if(mode==='fan-stack'){
       destination.fanGroups ||= destination.cards.length?[destination.cards.map(card=>card.id)]:[];
       destination.layout='fan-stack';destination.fanGroups.push(cards.map(card=>card.id));
     } else {destination.layout=mode;delete destination.fanGroups;}
-    destination.cards.push(...cards);
+    if(mode!=='insert')destination.cards.push(...cards);
     for (const source of taken.sources) if (source!==destination) cleanupEmptyPile(room,source);
   } else if (type === 'move') {
     const from = findPile(room, payload.fromId); let to = findPile(room, payload.toId);
     const index = from?.cards.findIndex((card) => card.id === payload.cardId) ?? -1;
-    if (index < 0 || (from?.kind==='hand'&&from.ownerId!==playerId)) return reject('Choose an available card and pile.');
+    if (index < 0 || (from?.kind==='hand'&&from.ownerId!==playerId)||(from?.kind==='deck'&&index!==from.cards.length-1)) return reject('Choose an available card and pile.');
     if (from === to) return reject('That card is already in this pile.');
     if (to?.kind==='tableau') return reject('Use placement to add cards to a table stack.');
     if(to?.kind==='hand'&&to.ownerId!==playerId)return reject('You can only move cards into your own hand.');
@@ -292,6 +354,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     const message = String(payload.message || '').trim().slice(0, 400); if (!message) return reject();
     const player = room.players.get(playerId);
     room.chat.push({ id: `${Date.now()}-${Math.random()}`, playerId, name: player.name, color: player.color, message, time: Date.now(), reactions: {} });
+    if(room.chat.length>300)room.chat.splice(0,room.chat.length-300);
   } else if (type === 'chat:react') {
     const message = room.chat.find((item) => item.id === payload.messageId);
     const emoji = isEmojiReaction(payload.emoji) ? payload.emoji : null;

@@ -26,7 +26,16 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
   const handId = `hand-${playerId}`;
   return <><button className="context-dismiss" aria-label="Close card menu" onClick={onClose}/><div ref={menuRef} className="table-context-menu" role="menu" style={position}>
     <b>{menu.cardId ? `${card?.rank || 'Face down'}${card?.suit || ''}` : pile.name || 'Card stack'}</b>
-    {menu.cardId ? <>
+    {(menu.selectionCards?.length||0)+(menu.selectionPiles?.length||0)>1 ? <>
+      <span className="context-count">{menu.selectionCards?.length||0} cards · {menu.selectionPiles?.length||0} piles selected</span>
+      {canPlay&&<>
+        <button role="menuitem" onClick={()=>{onAction('selection:flip',{cards:(menu.selectionCards||[]).map(item=>({cardId:item.card.id,fromId:item.pileId})),pileIds:menu.selectionPiles||[]});onClose();}}>Flip selection</button>
+        <button role="menuitem" onClick={()=>{onAction('selection:move',{cards:(menu.selectionCards||[]).map(item=>({cardId:item.card.id,fromId:item.pileId})),pileIds:menu.selectionPiles||[],toId:handId});onClose();}}>Move selection to my hand</button>
+        <button role="menuitem" onClick={()=>{onAction('selection:move',{cards:(menu.selectionCards||[]).map(item=>({cardId:item.card.id,fromId:item.pileId})),pileIds:menu.selectionPiles||[],toId:'discard'});onClose();}}>Move selection to discard</button>
+        <button role="menuitem" onClick={()=>{onAction('selection:move',{cards:(menu.selectionCards||[]).map(item=>({cardId:item.card.id,fromId:item.pileId})),pileIds:menu.selectionPiles||[],toId:'deck'});onClose();}}>Return selection to deck</button>
+        {!!menu.selectionPiles?.length&&<><span className="context-count">Pile actions</span><button role="menuitem" onClick={()=>{onAction('pile:batch',{pileIds:menu.selectionPiles,operation:'layout',layout:'fan'});onClose();}}>Fan selected piles</button><button role="menuitem" onClick={()=>{onAction('pile:batch',{pileIds:menu.selectionPiles,operation:'layout',layout:'stack'});onClose();}}>Stack selected piles</button><button role="menuitem" onClick={()=>{onAction('pile:batch',{pileIds:menu.selectionPiles,operation:'sort',mode:'suit'});onClose();}}>Sort piles by suit</button><button role="menuitem" onClick={()=>{onAction('pile:batch',{pileIds:menu.selectionPiles,operation:'sort',mode:'rank'});onClose();}}>Sort piles by rank</button></>}
+      </>}
+    </> : menu.cardId ? <>
       {canPlay&&<>
       <button role="menuitem" onClick={()=>run('flip')}>{card?.faceUp?'Turn face down':'Turn face up'}</button>
       {pile.kind !== 'hand' && <button role="menuitem" onClick={()=>run('move-card',{fromId:pile.id,toId:handId})}>Move to my hand</button>}
@@ -42,6 +51,8 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
         <button role="menuitem" onClick={()=>run('pile:layout',{layout:pile.layout==='fan-stack'?'fan':'fan-stack'})}>{pile.layout==='fan-stack'?'Show as one fan':'Layer a fan on this stack'}</button>
         {pile.layout==='fan-stack'&&pile.fanGroups?.length>1&&<button role="menuitem" onClick={()=>run('pile:split-top-fan')}>Separate top fan</button>}
         <button role="menuitem" onClick={()=>run('flip-top')}>Flip top card</button>
+        <button role="menuitem" onClick={()=>run('pile:sort',{mode:'suit'})}>Sort by suit</button>
+        <button role="menuitem" onClick={()=>run('pile:sort',{mode:'rank'})}>Sort by rank</button>
         <button role="menuitem" onClick={()=>run('return-stack',{toId:'deck'})}>Return whole stack to deck</button>
         <button role="menuitem" onClick={()=>run('return-stack',{toId:'discard'})}>Discard whole stack</button>
       </>}

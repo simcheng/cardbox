@@ -872,3 +872,17 @@
 @media(max-width:700px){.app-shell .table-heading{top:8px;}}
 @media(max-width:700px) and (max-height:500px){.app-shell .table-heading{top:5px;}}
 @media(prefers-reduced-motion:reduce){.app-shell .deck-chevron,.app-shell .pile-zone.action-shuffle .pile-cards .playing-card{transition:none;animation-duration:.01ms!important;}}
+
+/* Interaction polish: keep marquee selection from selecting felt labels and keep controls on pile edges. */
+.app-shell .table-surface{user-select:none;-webkit-user-select:none;}
+.app-shell .table-heading{top:20px;left:20px;}
+.app-shell .pile-zone.selected-pile{filter:drop-shadow(0 0 0.45rem #f0d88d);}
+.app-shell .pile-zone.selected-pile .pile-cards{outline:2px solid #f0d88d;outline-offset:4px;border-radius:5px;}
+.app-shell .fan-insertion-marker{position:absolute;z-index:43;width:3px;height:94px;display:block;transform:translate(-50%,-50%);border-radius:3px;background:#f4d783;box-shadow:0 0 0 2px #193f2f,0 0 12px #f4d783;pointer-events:none;}
+.app-shell .fan-insertion-card{position:absolute;z-index:42;transform:translate(-50%,-50%) scale(.58);transform-origin:center;pointer-events:none;filter:drop-shadow(0 4px 6px #071a12aa);}
+.app-shell .fan-insertion-card .playing-card{opacity:.84;outline:2px solid #f4d783;}
+@media(max-width:700px){.app-shell .table-heading{top:16px;left:16px;}}
+@media(max-width:700px) and (max-height:500px){.app-shell .table-heading{top:16px;}}
+.app-shell .fan-insertion-card.is-group::before,.app-shell .fan-insertion-card.is-group::after{content:'';position:absolute;z-index:-1;inset:4px -4px -4px 4px;border-radius:7px;background:#eceade;border:1px solid #99aa98;}
+.app-shell .fan-insertion-card.is-group::after{inset:8px -8px -8px 8px;}
+.app-shell .fan-insertion-count{position:absolute;right:-15px;top:-13px;display:grid;place-items:center;min-width:24px;height:24px;padding:0 5px;border-radius:99px;background:#194530;color:#fff;border:2px solid #f4d783;font-size:9px;font-weight:800;white-space:nowrap;box-shadow:0 2px 7px #071a1299;}

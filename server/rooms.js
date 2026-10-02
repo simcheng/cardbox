@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { createDeck, getDeck, shuffle } from './deck.js';
 
 const ROOM_TTL = 45 * 60 * 1000;
+const OFFLINE_RECONNECT_TTL = 15 * 60 * 1000;
+export const MAX_ROOM_PLAYERS = 12;
+const MAX_ROOM_IDENTITIES = 32;
 const rooms = new Map();
 const colors = ['#e0ad74','#84b6a0','#ce8d91','#9a9dde','#d6c66f','#80a8cf'];
 const animals = ['🐱','🐶','🐻','🐼','🦊','🐸','🐵','🐧','🦉','🐰'];
@@ -44,11 +47,12 @@ function publicRoom(room, viewerId) {
 }
 
 export function getRoom(id) { return rooms.get(id); }
+export function getRoomCount() { return rooms.size; }
 export function snapshot(room, viewerId) { return publicRoom(room, viewerId); }
 export function createRoom(name, playerName, settings = {}) {
-  const id = randomUUID().slice(0, 8).toUpperCase();
+  const id = randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase();
   const deckDefinition = getDeck(settings.deckId);
-  const player = { id: randomUUID(), name: playerName.slice(0, 24), color: colors[0], emoji: animals[0], online: true };
+  const player = { id: randomUUID(), sessionToken: randomUUID(), name: playerName.slice(0, 24), color: colors[0], emoji: animals[0], online: true };
   const room = {
     id, name: (name || 'A new table').slice(0, 36), hostId: player.id, cohostIds:new Set(),
     settings: { privateHands: true, hostControls: false, ...settings, deckId: deckDefinition.id },
@@ -59,13 +63,29 @@ export function createRoom(name, playerName, settings = {}) {
     ], chat: [], ledger: [], undoStack: [], updatedAt: Date.now(), timer: null,
   };
   rooms.set(id, room);
-  return { room, player };
+  return { room, player, playerToken: player.sessionToken };
 }
-export function joinRoom(room, playerName, requestedId) {
-  let player = room.players.get(requestedId);
+export function joinRoom(room, playerName, requestedId, requestedToken) {
+  const candidate = room.players.get(requestedId);
+  let player = candidate?.sessionToken===requestedToken ? candidate : null;
   if (!player) {
-    player = { id: randomUUID(), name: uniqueName(room, playerName), color: colors[room.players.size % colors.length], emoji: animals[room.players.size % animals.length], online: true };
+    const onlineCount=[...room.players.values()].filter(item=>item.online).length;
+    if (onlineCount >= MAX_ROOM_PLAYERS) return null;
+    if(room.players.size>=MAX_ROOM_IDENTITIES){
+      const now=Date.now();
+      const expired=[...room.players.values()].filter(item=>!item.online&&item.id!==room.hostId&&now-(item.offlineAt||0)>=OFFLINE_RECONNECT_TTL).sort((a,b)=>(a.offlineAt||0)-(b.offlineAt||0));
+      const discard=room.piles.find(pile=>pile.id==='discard');
+      while(room.players.size>=MAX_ROOM_IDENTITIES&&expired.length){
+        const removed=expired.shift(),hand=room.piles.find(pile=>pile.kind==='hand'&&pile.ownerId===removed.id);
+        if(hand&&discard){for(const card of hand.cards){card.ownerId=null;card.faceUp=true;}discard.cards.push(...hand.cards);room.piles.splice(room.piles.indexOf(hand),1);}
+        room.cohostIds?.delete(removed.id);room.players.delete(removed.id);
+      }
+      if (room.players.size >= MAX_ROOM_IDENTITIES) return null;
+    }
+    player = { id: randomUUID(), sessionToken: randomUUID(), name: uniqueName(room, playerName), color: colors[room.players.size % colors.length], emoji: animals[room.players.size % animals.length], online: true };
     room.players.set(player.id, player);
+  } else if(!player.online&&[...room.players.values()].filter(item=>item.online).length>=MAX_ROOM_PLAYERS) {
+    return null;
   }
   player.name = uniqueName(room, playerName || player.name, player.id);
   player.online = true;
