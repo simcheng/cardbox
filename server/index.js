@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createRoom, getRoom, getRoomCount, joinRoom, snapshot, touch } from './rooms.js';
-import { applyTableAction } from './tableActions.js';
+import { applyTableAction, supportedTableActions } from './tableActions.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -14,10 +14,9 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const playerSockets=new Map();
 const roomCreateAttempts=new Map(),MAX_ACTIVE_ROOMS=500,ROOM_CREATES_PER_MINUTE=5;
 const actionAttempts=new Map(),MAX_ACTIONS_PER_MINUTE=180,MAX_ROOM_PILES=256;
-const tableActionTypes=new Set(['chat','chat:react','deal','draw','flip','flip-cards','flip-top','hand:reorder','hand:reorder-cards','host:assign','player:kick','turn:start','turn:next','turn:stop','move','move-card','move-cards','move-stack','pile:absorb-to-discard','discard:to-deck','discard:to-hand','pile:batch','pile:create','pile:delete','pile:layout','pile:move','pile:rename','pile:sort','pile:split-top-fan','place','place-cards','profile','reset-board','return-card','return-stack','selection:flip','selection:move','settings','shuffle','sort-hand','undo']);
 function validActionPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.getPrototypeOf(payload) !== Object.prototype) return false;
-  if (typeof payload.type !== 'string' || !tableActionTypes.has(payload.type)) return false;
+  if (typeof payload.type !== 'string' || !supportedTableActions.has(payload.type)) return false;
   if (payload.cards !== undefined && (!Array.isArray(payload.cards) || payload.cards.length > 500 || payload.cards.some(item => !item || typeof item !== 'object' || Array.isArray(item) || typeof item.cardId !== 'string' || typeof item.fromId !== 'string'))) return false;
   if (payload.pileIds !== undefined && (!Array.isArray(payload.pileIds) || payload.pileIds.length > 100 || payload.pileIds.some(id => typeof id !== 'string'))) return false;
   if (payload.cardIds !== undefined && (!Array.isArray(payload.cardIds) || payload.cardIds.length > 500 || payload.cardIds.some(id => typeof id !== 'string'))) return false;

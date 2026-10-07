@@ -1,5 +1,15 @@
 import { createDeck, getDeck, shuffle } from './deck.js';
 import { sortCards } from '../shared/cardOrder.js';
+export const supportedTableActions = new Set([
+  'chat', 'chat:react', 'deal', 'draw', 'flip', 'flip-cards', 'flip-top',
+  'hand:reorder', 'hand:reorder-cards', 'host:assign', 'player:kick',
+  'turn:start', 'turn:next', 'turn:stop', 'move', 'move-card', 'move-cards',
+  'move-stack', 'pile:absorb-to-discard', 'discard:to-deck', 'discard:to-hand',
+  'pile:batch', 'pile:create', 'pile:delete', 'pile:layout', 'pile:move',
+  'pile:rename', 'pile:sort', 'pile:split-top-fan', 'place', 'place-cards',
+  'profile', 'reset-board', 'return-card', 'return-stack', 'selection:flip',
+  'selection:move', 'settings', 'shuffle', 'sort-hand', 'undo',
+]);
 const findPile = (room, id) => room.piles.find((pile) => pile.id === id);
 const isDiscardPile = (pile) => pile?.id === 'discard' || pile?.pileType === 'discard';
 const emojiSegments = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
