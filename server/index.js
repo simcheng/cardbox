@@ -182,7 +182,8 @@ io.on('connection', (socket) => {
     if(!validActionPayload(payload))return done({ok:false,error:'Invalid table action.'});
     if(!mayPerformAction(room.id,playerId))return done({ok:false,error:'You are sending table actions too quickly. Try again shortly.'});
     if(!mayCreatePile(room,payload))return done({ok:false,error:'This table has reached its shared pile limit.'});
-    const before = { piles: structuredClone(room.piles), settings: structuredClone(room.settings), cohostIds:[...(room.cohostIds||[])] };
+    const needsPileSnapshot=!['chat','chat:react','profile','settings','host:assign','player:kick','turn:start','turn:next','turn:stop'].includes(payload.type);
+    const before = { piles: needsPileSnapshot?structuredClone(room.piles):[], cohostIds:payload.type==='host:assign'?[...(room.cohostIds||[])]:[] };
     if(payload.type==='player:kick')payload.targetName=room.players.get(payload.targetId)?.name||'';
     let result;
     try { result = applyTableAction(room, playerId, payload); }
