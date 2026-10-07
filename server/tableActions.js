@@ -51,7 +51,7 @@ export function applyTableAction(room, playerId, payload = {}) {
   const isCohost = room.cohostIds.has(playerId);
   const isModerator = isHost || isCohost;
   const mayMoveCards = !room.settings.hostControls || isModerator;
-  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile', 'host:assign'].includes(type) && !mayMoveCards) return reject('Only the host or a cohost can move cards at this table.');
+  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile', 'host:assign', 'player:kick'].includes(type) && !mayMoveCards) return reject('Only the host or a cohost can move cards at this table.');
 
   if (type === 'undo') {
     const previous = room.undoStack?.pop();
@@ -61,7 +61,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     return { ok: true };
   }
   if (type === 'reset-board' && !isModerator) return reject('Only the host or a cohost can reset the board.');
-  const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign'].includes(type) ? null : { piles: structuredClone(room.piles) };
+  const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign', 'player:kick'].includes(type) ? null : { piles: structuredClone(room.piles) };
 
   if (type === 'shuffle') {
     const pile = findPile(room, 'deck'); if (!pile) return reject();
@@ -339,6 +339,13 @@ export function applyTableAction(room, playerId, payload = {}) {
     const pile = findPile(room, payload.pileId);
     if (!pile || pile.kind === 'hand' || !Number.isFinite(Number(payload.x)) || !Number.isFinite(Number(payload.y))) return reject('Choose a movable pile and a table position.');
     pile.x = Math.min(94, Math.max(6, Number(payload.x))); pile.y = Math.min(78, Math.max(18, Number(payload.y)));
+  } else if (type === 'player:kick') {
+    if (!isModerator) return reject('Only the host or a cohost can kick players.');
+    const target=room.players.get(payload.targetId);
+    if (!target || target.id===room.hostId || target.id===playerId) return reject('Choose a non-host player to kick.');
+    const hand=room.piles.find(pile=>pile.kind==='hand'&&pile.ownerId===target.id),discard=findPile(room,'discard');
+    if(hand&&discard){for(const card of hand.cards){card.ownerId=null;card.faceUp=true;}discard.cards.push(...hand.cards);room.piles.splice(room.piles.indexOf(hand),1);}
+    room.cohostIds.delete(target.id);room.players.delete(target.id);return {ok:true,kickedPlayerId:target.id};
   } else if (type === 'host:assign') {
     if (!isHost) return reject('Only the primary host can assign host roles.');
     const target=room.players.get(payload.targetId);

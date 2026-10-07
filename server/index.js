@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const root = path.dirname(fileURLToPath(import.meta.url));
 const playerSockets=new Map();
 const roomCreateAttempts=new Map(),MAX_ACTIVE_ROOMS=500,ROOM_CREATES_PER_MINUTE=5;
-const tableActionTypes=new Set(['chat','chat:react','deal','draw','flip','flip-cards','flip-top','hand:reorder','hand:reorder-cards','host:assign','move','move-card','move-cards','move-stack','pile:absorb-to-discard','pile:batch','pile:create','pile:delete','pile:layout','pile:move','pile:rename','pile:sort','pile:split-top-fan','place','place-cards','profile','reset-board','return-card','return-stack','selection:flip','selection:move','settings','shuffle','sort-hand','undo']);
+const tableActionTypes=new Set(['chat','chat:react','deal','draw','flip','flip-cards','flip-top','hand:reorder','hand:reorder-cards','host:assign','player:kick','move','move-card','move-cards','move-stack','pile:absorb-to-discard','pile:batch','pile:create','pile:delete','pile:layout','pile:move','pile:rename','pile:sort','pile:split-top-fan','place','place-cards','profile','reset-board','return-card','return-stack','selection:flip','selection:move','settings','shuffle','sort-hand','undo']);
 function validActionPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.getPrototypeOf(payload) !== Object.prototype) return false;
   if (typeof payload.type !== 'string' || !tableActionTypes.has(payload.type)) return false;
@@ -101,6 +101,7 @@ function ledgerEntry(room, playerId, payload, before) {
   else if (type === 'pile:create') description = `Created ${payload.name || 'a shared pile'}`;
   else if (type === 'pile:absorb-to-discard') {const sources=before.piles.filter(p=>p.kind!=='deck'&&p.kind!=='hand'&&p.id!=='discard'&&p.pileType!=='discard'&&p.cards.length);const items=sources.flatMap(p=>pileItems(p));const target=before.piles.find(p=>p.id===payload.pileId&&(p.id==='discard'||p.pileType==='discard'))||before.piles.find(p=>p.id==='discard');description=`Moved ${items.length} table cards into ${target?.name||'discard'}`;details={cards:items.map(item=>item.label),cardItems:items,count:items.length,sources:sources.map(p=>p.name||p.id),destination:target?.name||'Discard'};}
   else if (type === 'host:assign') { const target=room.players.get(payload.targetId),wasCohost=before.cohostIds?.includes(payload.targetId); description=payload.role==='host'?`Transferred host to ${target?.name||'a player'}`:`${wasCohost?'Removed':'Assigned'} ${target?.name||'a player'} ${wasCohost?'from cohost':'as cohost'}`;details={targetId:payload.targetId,targetName:target?.name,role:payload.role}; }
+  else if (type === 'player:kick') { description=`Kicked ${payload.targetName||'a player'} from the table`;details={targetId:payload.targetId,targetName:payload.targetName||null}; }
   else if (type === 'pile:rename') { description = `Renamed ${pileName(priorPile)} to ${payload.name}`; details = { pileId: priorPile?.id, previousName: priorPile?.name, name: payload.name }; }
   else if (type === 'pile:delete') description = `Deleted an empty ${pileName(priorPile)}`;
   else if (type === 'reset-board') { const beforeCards=before.piles.flatMap(p=>p.cards.map(card=>({label:cardName(card),privateToPlayerId:p.kind==='hand'&&room.settings.privateHands?p.ownerId:!card.faceUp?'__private__':null})));description = 'Reset the board and shuffled a fresh deck'; details = { count: room.piles.find(p=>p.id==='deck')?.cards.length || 0, cards:beforeCards.map(item=>item.label),cardItems:beforeCards,sourcePiles:before.piles.map(p=>({name:p.name||p.id,count:p.cards.length})) }; }
@@ -159,10 +160,16 @@ io.on('connection', (socket) => {
     if (!room || !room.players.has(playerId)) return done({ ok: false, error: 'Join a table first.' });
     if(!validActionPayload(payload))return done({ok:false,error:'Invalid table action.'});
     const before = { piles: structuredClone(room.piles), settings: structuredClone(room.settings), cohostIds:[...(room.cohostIds||[])] };
+    if(payload.type==='player:kick')payload.targetName=room.players.get(payload.targetId)?.name||'';
     let result;
     try { result = applyTableAction(room, playerId, payload); }
     catch(error) { console.error('Rejected malformed table action:',error);return done({ok:false,error:'That table action could not be processed.'}); }
     if (!result.ok) return done(result);
+    if(payload.type==='player:kick'&&result.kickedPlayerId){
+      const sockets=playerSockets.get(`${room.id}:${result.kickedPlayerId}`);
+      for(const socketId of sockets||[])io.sockets.sockets.get(socketId)?.disconnect(true);
+      playerSockets.delete(`${room.id}:${result.kickedPlayerId}`);
+    }
     room.ledger.push(ledgerEntry(room, playerId, payload, before));
     if (room.ledger.length > 1000) room.ledger.shift();
     const drawRecipients = payload.type === 'deal'

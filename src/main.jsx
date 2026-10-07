@@ -52,6 +52,17 @@ function App() {
   const selectedIds = selected.map((item)=>item.card.id);
   function clearSelection() { setSelected([]);setSelectedPileIds([]); }
   function clearDragVisual(){if(dragCleanupTimer.current)clearTimeout(dragCleanupTimer.current);dragCleanupTimer.current=null;dragLatestPositionRef.current=null;setDragCard(null);setDraggedCardIds([]);setDragCount(1);setDragPosition(null);setDragOverHand(false);}
+  function releasePointer(pointer) { try { if (pointer?.target?.hasPointerCapture?.(pointer.pointerId)) pointer.target.releasePointerCapture(pointer.pointerId); } catch {} }
+  function cancelInteraction(event) {
+    if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
+    if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
+    cardMoveFrame.current=null; pileMoveFrame.current=null;
+    releasePointer(cardPointer.current); releasePointer(touchStart.current); releasePointer(selectionPointer.current);
+    cardPointer.current=null; touchStart.current=null; selectionPointer.current=null;
+    setSelectionBox(null); setPileDrag(null); setPendingPlacement(null); setPreview(null);
+    clearDragVisual(); clearSelection(); setContextMenu(null); setMenu('');
+    if(event) { event.preventDefault(); event.stopPropagation(); }
+  }
   useLayoutEffect(()=>{const point=dragLatestPositionRef.current;if(point&&dragGhostRef.current){dragGhostRef.current.style.left=`${point.x}px`;dragGhostRef.current.style.top=`${point.y}px`;}});
   function moveSelection(toId, cards = selected, onComplete) {
     if (!cards.length) return;
@@ -96,10 +107,19 @@ function App() {
     socket.on('connect', join);
     const onDisconnect=()=>{joinInFlightRef.current=false;};
     socket.on('disconnect',onDisconnect);
-    socket.on('room:update', setRoom);
+    const onRoomUpdate = (nextRoom) => {
+      setRoom(nextRoom);
+      // A room snapshot is authoritative. If the pointer is no longer active,
+      // discard any optimistic drag/preview left behind by a delayed frame or
+      // acknowledgement so the client cannot remain visually out of sync.
+      if (!cardPointer.current && !touchStart.current) {
+        setPileDrag(null); setPreview(null); setPendingPlacement(null); clearDragVisual();
+      }
+    };
+    socket.on('room:update', onRoomUpdate);
     const onCue = (event) => { setCue(event); if(['chat','chat:react'].includes(event.type)&&event.playerId!==viewerRef.current&&!chatOpenRef.current)setUnreadChat(count=>count+1); setTimeout(()=>setCue((current)=>current?.id===event.id?null:current),['chat','chat:react'].includes(event.type)?2600:900); };
     socket.on('table:cue', onCue);
-    return () => { socket.off('connect', join); socket.off('disconnect',onDisconnect); socket.off('room:update', setRoom); socket.off('table:cue', onCue); };
+    return () => { socket.off('connect', join); socket.off('disconnect',onDisconnect); socket.off('room:update', onRoomUpdate); socket.off('table:cue', onCue); };
   }, [initialRoom, name]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [room?.chat?.length]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2200); return () => clearTimeout(t); }, [toast]);
@@ -107,6 +127,15 @@ function App() {
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
   }, []);
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      const active = !!cardPointer.current || !!touchStart.current || !!pileDrag || !!preview || !!pendingPlacement || !!selectionPointer.current || selected.length>0 || selectedPileIds.length>0;
+      if (active || contextMenu || menu || settingsOpen || profileOpen || inviteOpen || ledgerOpen) cancelInteraction(event);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [pileDrag, preview, pendingPlacement, selected.length, selectedPileIds.length, contextMenu, menu, settingsOpen, profileOpen, inviteOpen, ledgerOpen]);
   useEffect(() => {
     if (!pileDrag?.pending) return;
     const persisted = room?.piles.find((pile)=>pile.id===pileDrag.pileId);
@@ -133,7 +162,12 @@ function App() {
     joinInFlightRef.current=true;
     socket.emit('room:join', { roomId: normalizedRoom, playerName: name.trim(), playerId: requestedId, playerToken:requestedToken }, (r) => {joinInFlightRef.current=false;r.ok?applyRoom(r):setError(r.error)});
   }
-  const action = (type, extra = {}, onComplete) => socket.emit('table:action', { type, ...extra }, (r) => { if (!r?.ok && r?.error) setToast(r.error); onComplete?.(r); });
+  const action = (type, extra = {}, onComplete) => {
+    let settled=false;
+    const finish=(r)=>{if(settled)return;settled=true;if (!r?.ok && r?.error) setToast(r.error);onComplete?.(r);};
+    const timer=onComplete?setTimeout(()=>finish(null),2500):null;
+    socket.emit('table:action', { type, ...extra }, (r) => {if(timer)clearTimeout(timer);finish(r);});
+  };
   useEffect(()=>{
     if(menu!=='actions')return;
     let frame=0;
@@ -309,7 +343,7 @@ function App() {
     const group = selected.find(item=>item.card.id===card.id) ? selected : [{card,pileId:fromId}];
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     cardMoveFrame.current = null;
-    cardPointer.current = { card, fromId, cards:group, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, latest: null, geometry:null };
+    cardPointer.current = { card, fromId, cards:group, pointerId: e.pointerId, target:e.currentTarget, startX: e.clientX, startY: e.clientY, dragging: false, latest: null, geometry:null };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onCardPointerMove(e) {
@@ -340,7 +374,7 @@ function App() {
     if (!active || active.pointerId !== e.pointerId) return;
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     cardMoveFrame.current = null;
-    cardPointer.current = null;
+    releasePointer(active); cardPointer.current = null;
     setPendingPlacement(null);
     if (active.dragging) {
       if(dragCleanupTimer.current)clearTimeout(dragCleanupTimer.current);
@@ -380,7 +414,7 @@ function App() {
     if (cardPointer.current?.pointerId !== e.pointerId) return;
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     cardMoveFrame.current = null;
-    cardPointer.current = null; setPendingPlacement(null); setPreview(null); clearSelection(); clearDragVisual();
+    releasePointer(cardPointer.current); cardPointer.current = null; setPendingPlacement(null); setPreview(null); clearSelection(); clearDragVisual();
   }
   function onPilePointerDown(e, pile) {
     if (!canPlay || pile.kind === 'hand' || (e.target.closest('.playing-card') && !e.target.closest('.pile-grab'))) return;
@@ -390,7 +424,7 @@ function App() {
     if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
     pileMoveFrame.current = null;
     const startViewX=(pileRect.left+pileRect.width/2-bounds.left)/bounds.width*100,startViewY=(pileRect.top+pileRect.height/2-bounds.top)/bounds.height*100,startModel=viewToTablePoint(startViewX,startViewY);
-    touchStart.current = { x: e.clientX, y: e.clientY, pile, startModel, pointerId: e.pointerId, bounds, moved: false, latest: null, startViewX,startViewY,grabOffsetX: e.clientX-(pileRect.left+pileRect.width/2), grabOffsetY: e.clientY-(pileRect.top+pileRect.height/2) };
+    touchStart.current = { x: e.clientX, y: e.clientY, pile, startModel, pointerId: e.pointerId, target:e.currentTarget, bounds, moved: false, latest: null, startViewX,startViewY,grabOffsetX: e.clientX-(pileRect.left+pileRect.width/2), grabOffsetY: e.clientY-(pileRect.top+pileRect.height/2) };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onPilePointerMove(e) {
@@ -418,7 +452,7 @@ function App() {
     const active = touchStart.current; if (!active || active.pointerId !== e.pointerId) return;
     if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
     pileMoveFrame.current = null;
-    touchStart.current = null;
+    releasePointer(active); touchStart.current = null;
     if (active.moved) {
       const bounds=active.bounds;
       const point=moveTablePointByViewDelta({...active.pile,...active.startModel},(e.clientX-active.grabOffsetX-bounds.left)/bounds.width*100-active.startViewX,(e.clientY-active.grabOffsetY-bounds.top)/bounds.height*100-active.startViewY);
@@ -428,15 +462,15 @@ function App() {
       const layers=document.elementsFromPoint?.(e.clientX,e.clientY)||[document.elementFromPoint(e.clientX,e.clientY)].filter(Boolean);
       const handTarget=layers.some(element=>element.closest?.('.table-hand-zone'));
       if(active.pile.kind==='tableau'&&handTarget){
-        action('move-stack',{fromId:active.pile.id,toId:`hand-${playerId}`},()=>setPileDrag(null));ignoreClick.current=true;setTimeout(()=>{ignoreClick.current=false;},250);return;
+        action('move-stack',{fromId:active.pile.id,toId:`hand-${playerId}`},()=>{setPileDrag(null);setPreview(null);setPendingPlacement(null);clearSelection();});ignoreClick.current=true;setTimeout(()=>{ignoreClick.current=false;},250);return;
       }
       const target=pileAtPoint(e.clientX,e.clientY,[active.pile.id])?.pile;
       if(active.pile.kind==='tableau'&&target){
         if(target.kind==='tableau'){
           const targetElement=[...tableRef.current.querySelectorAll('.tableau-zone')].find(element=>element.dataset.placeId===target.id);
           const spot=targetElement?resolveTablePlacement(e.clientX,e.clientY,active.bounds,[{...target,rect:targetElement.getBoundingClientRect()}],target.id):null;
-          action('move-stack',{fromId:active.pile.id,toId:target.id,mode:spot?.mode==='insert'?'fan-stack':spot?.mode||'stack'},()=>setPileDrag(null));
-        }else action('move-stack',{fromId:active.pile.id,toId:target.id},()=>setPileDrag(null));
+          action('move-stack',{fromId:active.pile.id,toId:target.id,mode:spot?.mode==='insert'?'fan-stack':spot?.mode||'stack'},()=>{setPileDrag(null);setPreview(null);setPendingPlacement(null);clearSelection();});
+        }else action('move-stack',{fromId:active.pile.id,toId:target.id},()=>{setPileDrag(null);setPreview(null);setPendingPlacement(null);clearSelection();});
         ignoreClick.current=true;setTimeout(()=>{ignoreClick.current=false;},250);return;
       }
       if(e.clientX<bounds.left||e.clientX>bounds.right||e.clientY<bounds.top||e.clientY>bounds.bottom){setPileDrag(null);return;}
@@ -448,7 +482,7 @@ function App() {
     if (touchStart.current?.pointerId !== e.pointerId) return;
     if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
     pileMoveFrame.current = null;
-    touchStart.current = null;
+    releasePointer(touchStart.current); touchStart.current = null;
     setPileDrag(null);
   }
 
@@ -554,7 +588,7 @@ function App() {
       <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isModerator} selectedCount={selected.length} canAbsorb={room.piles.some(item=>item.kind!=='deck'&&item.kind!=='hand'&&item.id!=='discard'&&item.pileType!=='discard'&&item.cards.length>0)} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
     </section></div>
     <ChatDrawer open={mobilePanel} room={room} playerId={playerId} text={chatText} setText={setChatText} onSend={sendChat} onReact={(messageId,emoji)=>action('chat:react',{messageId,emoji})} onClose={()=>setMobilePanel(false)} onInvite={copyInvite} chatEnd={chatEnd} theme={theme}/>
-    <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
+    <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} onKick={(targetId)=>action('player:kick',{targetId})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
     <InviteDialog open={inviteOpen} room={room} onClose={()=>setInviteOpen(false)} onToast={setToast}/>
     <TableContextMenu menu={contextMenu} room={room} playerId={playerId} canPlay={canPlay} onAction={action} onClose={()=>setContextMenu(null)}/>
     <LedgerDialog open={ledgerOpen} entries={room.ledger||[]} onClose={()=>setLedgerOpen(false)}/>
