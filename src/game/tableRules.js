@@ -10,7 +10,11 @@ export function snapToTable(clientX, clientY, rect) {
 
 export function resolveTablePlacement(clientX, clientY, rect, nearbyPiles = [], preferredPileId = null) {
   const nearby = nearbyPiles.map((pile) => ({ ...pile, distance: Math.hypot(clientX - (pile.rect.left + pile.rect.width / 2), clientY - (pile.rect.top + pile.rect.height / 2)) })).sort((a,b) => a.distance - b.distance)[0];
-  const target = preferredPileId ? nearbyPiles.find((pile) => pile.id === preferredPileId) : nearby?.distance < PILE_SNAP_DISTANCE ? nearby : null;
+  const preferred = preferredPileId ? nearbyPiles.find((pile) => pile.id === preferredPileId) : null;
+  // A pile's interaction box can be larger than its actual snap area. Keep
+  // hovering responsive and fall back to the table grid until the pointer is
+  // genuinely close enough to combine with the pile.
+  const target = preferred?.distance < PILE_SNAP_DISTANCE ? preferred : nearby?.distance < PILE_SNAP_DISTANCE ? nearby : null;
   if (target) {
     if (['fan', 'fan-stack'].includes(target.layout)) {
       const progress = Math.min(1, Math.max(0, (clientX - target.rect.left) / Math.max(1, target.rect.width)));

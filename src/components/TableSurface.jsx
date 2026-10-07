@@ -25,12 +25,14 @@ export default function TableSurface({
     return()=>observer.disconnect();
   },[tableRef]);
   useEffect(()=>{
-    if(!['draw','deal'].includes(cue?.type)||cue.playerId===playerId||!cue.recipientIds?.includes(playerId)){setDrawFlight(null);return;}
+    if(!['draw','deal'].includes(cue?.type)||cue.playerId===playerId){setDrawFlight(null);return;}
     setDrawFlight(null);
     let frame=requestAnimationFrame(()=>{
-      const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone');
-      if(!surface||!deck||!hand)return;
-      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect(),h=hand.getBoundingClientRect();
+      const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone'),recipientSeat=surface?.querySelector(`[data-player-id="${cue.playerId}"]`);
+      if(!surface||!deck)return;
+      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect(),destination=(cue.playerId===playerId?hand:recipientSeat);
+      if(!destination)return;
+      const h=destination.getBoundingClientRect();
       const dealt=cue.drawCounts?.[playerId] ?? cue.drawCount ?? 1;
       if(dealt<1)return;
       setDrawFlight({id:cue.id,x:d.left+d.width/2-s.left-28.5,y:d.top+d.height/2-s.top-40,dx:h.left+h.width/2-(d.left+d.width/2),dy:h.top+h.height/2-(d.top+d.height/2),count:Math.min(3,dealt)});
@@ -76,11 +78,12 @@ export default function TableSurface({
     const angle = (90 + 360 * (index-selfIndex) / Math.max(1,playerCount)) * Math.PI / 180;
     return { player, x:50 + 42*Math.cos(angle), y:50 + 30*Math.sin(angle) };
   });
-  const cueClass = cue?.type==='deal'?'draw':cue?.type?.replaceAll(':','-');
+  const cueClass = cue?.playerId===playerId?'':cue?.type==='deal'?'draw':cue?.type?.replaceAll(':','-');
   const turnRemaining=room?.turn?.deadlineAt?Math.max(0,Math.ceil((room.turn.deadlineAt-turnClock)/1000)):null;
   return <div className="table-wrap">{room.turn?.enabled&&<div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}><span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`:'Time expired'}</small>}</span></div>}<div className="table-surface" ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
     <div className="table-seam"/>
-    {seats.map(({player,x,y})=><div className={`seat ${cue?.playerId!==playerId&&(cue?.playerId===player.id||cue?.recipientIds?.includes(player.id))?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
+    {(dragCardId||pileDrag?.pileId)&&<div className="placement-boundary" aria-hidden="true"/>}
+    {seats.map(({player,x,y})=><div data-player-id={player.id} className={`seat ${cue?.playerId!==playerId&&(cue?.playerId===player.id||cue?.recipientIds?.includes(player.id))?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
       <div className="seat-avatar" style={{'--avatar':player.color}}>{player.emoji||player.name.slice(0,1).toUpperCase()}<i className={player.online?'':'offline'}/></div>
       <span>{player.name}</span><small className="seat-count"><span className="hand-card-icon" aria-hidden="true">{Array.from({length:Math.min(4,player.handCount)},(_,i)=><i key={i}/>)}</span>{player.handCount>4&&<i className="hand-extra">+{player.handCount-4}</i>}<b>{player.handCount}</b> {player.handCount===1?'card':'cards'}</small>
       {cue?.type==='chat'&&cue.playerId===player.id&&cue.message&&<span className="seat-notification" key={cue.id}>{cue.message}</span>}

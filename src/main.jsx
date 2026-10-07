@@ -372,6 +372,8 @@ function App() {
           cardMoveFrame.current = null;
           if (cardPointer.current !== active || !active.dragging || !active.latest) return;
           const point = active.latest;
+          if (active.lastPreviewPoint && Math.hypot(point.clientX-active.lastPreviewPoint.clientX,point.clientY-active.lastPreviewPoint.clientY)<2) return;
+          active.lastPreviewPoint = point;
           const target = document.elementFromPoint(point.clientX,point.clientY);
           const overHand = !!target?.closest('.table-hand-zone');
           dragLatestPositionRef.current={x:point.clientX,y:point.clientY};if(dragGhostRef.current){dragGhostRef.current.style.left=`${point.clientX}px`;dragGhostRef.current.style.top=`${point.clientY}px`;}

@@ -78,7 +78,7 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
               <div className="deal-all-row"><label>Cards each<input type="number" min="1" max="13" value={dealEachCount} onChange={(e)=>setDealEachCount(Math.max(1,Math.min(13,Number(e.target.value)||1)))}/></label><button onClick={()=>{onAction('deal',{count:dealEachCount,toAll:true});setOpen(false)}}>Deal to everyone</button></div>
               <button onClick={()=>{onAction('pile:create',{name:'New pile'});setOpen(false)}}>＋ Create a card pile</button>
               <button onClick={()=>{onAction('pile:create',{name:'New discard pile',pileType:'discard'});setOpen(false)}}>＋ Create a discard pile</button>
-              {canAbsorb&&<button onClick={()=>{onAction('pile:absorb-to-discard');setOpen(false)}}>Absorb table cards into discard</button>}
+              {canAbsorb&&<button onClick={()=>{onAction('pile:absorb-to-discard');setOpen(false)}}>↘ Absorb table cards into discard</button>}
             </>}
             {canPlay&&selectedCount>0&&<>
               <div className="selection-menu-label">{selectedCount} selected</div>

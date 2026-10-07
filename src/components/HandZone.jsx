@@ -7,7 +7,7 @@ export default function HandZone({ hand, playerId, canPlay = true, selectedIds =
   const selectedSet=useMemo(()=>new Set(selectedIds),[selectedIds.join('\0')]);
   const draggingSet=useMemo(()=>new Set(dragCardIds),[dragCardIds.join('\0')]);
   const scrollHand = (direction) => {const strip=cardsRef.current;if(!strip)return;strip.scrollTo({left:Math.max(0,Math.min(strip.scrollWidth-strip.clientWidth,strip.scrollLeft+direction*Math.max(200,strip.clientWidth*.72))),behavior:'smooth'});};
-  const receivedDrawCue = (cue?.type==='draw'&&cue.playerId===playerId)||(cue?.type==='deal'&&cue.recipientIds?.includes(playerId));
+  const receivedDrawCue = cue?.playerId!==playerId&&((cue?.type==='draw'&&cue.recipientIds?.includes(playerId))||(cue?.type==='deal'&&cue.recipientIds?.includes(playerId)));
   useEffect(()=>{
     const strip=cardsRef.current;if(!strip){setCanScroll(false);return;}
     const measure=()=>setCanScroll(strip.scrollWidth>strip.clientWidth+2);
