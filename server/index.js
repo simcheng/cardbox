@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 const root = path.dirname(fileURLToPath(import.meta.url));
 const playerSockets=new Map();
 const roomCreateAttempts=new Map(),MAX_ACTIVE_ROOMS=500,ROOM_CREATES_PER_MINUTE=5;
+const actionAttempts=new Map(),MAX_ACTIONS_PER_MINUTE=180,MAX_ROOM_PILES=256;
 const tableActionTypes=new Set(['chat','chat:react','deal','draw','flip','flip-cards','flip-top','hand:reorder','hand:reorder-cards','host:assign','player:kick','turn:start','turn:next','turn:stop','move','move-card','move-cards','move-stack','pile:absorb-to-discard','discard:to-deck','discard:to-hand','pile:batch','pile:create','pile:delete','pile:layout','pile:move','pile:rename','pile:sort','pile:split-top-fan','place','place-cards','profile','reset-board','return-card','return-stack','selection:flip','selection:move','settings','shuffle','sort-hand','undo']);
 function validActionPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.getPrototypeOf(payload) !== Object.prototype) return false;
@@ -27,6 +28,22 @@ function mayCreateRoom(socket) {
   if(recent.length>=ROOM_CREATES_PER_MINUTE||getRoomCount()>=MAX_ACTIVE_ROOMS)return false;
   recent.push(now);roomCreateAttempts.set(key,recent);
   if(roomCreateAttempts.size>10_000)for(const [address,times] of roomCreateAttempts)if(!times.some(time=>now-time<60_000))roomCreateAttempts.delete(address);
+  return true;
+}
+function mayPerformAction(roomId,playerId) {
+  const now=Date.now(),key=`${roomId}:${playerId}`,attempt=actionAttempts.get(key);
+  if(attempt&&now-attempt.startedAt<60_000){
+    if(attempt.count>=MAX_ACTIONS_PER_MINUTE)return false;
+    attempt.count++;
+  }else actionAttempts.set(key,{startedAt:now,count:1});
+  if(actionAttempts.size>10_000)for(const [identity,entry] of actionAttempts)if(now-entry.startedAt>=60_000)actionAttempts.delete(identity);
+  return true;
+}
+function mayCreatePile(room,payload) {
+  if(room.piles.length<MAX_ROOM_PILES)return true;
+  if(['pile:create','pile:split-top-fan'].includes(payload.type))return false;
+  if(payload.type==='place')return ['stack','fan','fan-stack'].includes(payload.mode);
+  if(payload.type==='place-cards')return ['stack','fan','fan-stack','insert'].includes(payload.mode);
   return true;
 }
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -163,6 +180,8 @@ io.on('connection', (socket) => {
     const room = getRoom(socket.data.roomId); const playerId = socket.data.playerId;
     if (!room || !room.players.has(playerId)) return done({ ok: false, error: 'Join a table first.' });
     if(!validActionPayload(payload))return done({ok:false,error:'Invalid table action.'});
+    if(!mayPerformAction(room.id,playerId))return done({ok:false,error:'You are sending table actions too quickly. Try again shortly.'});
+    if(!mayCreatePile(room,payload))return done({ok:false,error:'This table has reached its shared pile limit.'});
     const before = { piles: structuredClone(room.piles), settings: structuredClone(room.settings), cohostIds:[...(room.cohostIds||[])] };
     if(payload.type==='player:kick')payload.targetName=room.players.get(payload.targetId)?.name||'';
     let result;
