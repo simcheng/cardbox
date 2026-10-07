@@ -20,8 +20,8 @@ export default function ChatDrawer({ open, room, playerId, text, setText, onSend
     let frame=0;
     const update=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>placePicker());};
     const outside=(event)=>{if(!event.target.closest?.('.reaction-picker,.reaction-picker-trigger'))setPickerFor('');};
-    update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);document.addEventListener('pointerdown',outside);
-    return()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true);document.removeEventListener('pointerdown',outside);};
+    const viewport=window.visualViewport;update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);viewport?.addEventListener('resize',update);viewport?.addEventListener('scroll',update);document.addEventListener('pointerdown',outside);
+    return()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true);viewport?.removeEventListener('resize',update);viewport?.removeEventListener('scroll',update);document.removeEventListener('pointerdown',outside);};
   },[pickerFor,otherOpen,open]);
 
   function togglePicker(messageId,event) {

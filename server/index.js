@@ -186,12 +186,24 @@ io.on('connection', (socket) => {
       return [recipientId, Math.max(0, afterCount - beforeCount)];
     }));
     const selectedCardIds=[...(payload.cards||[]).map(item=>item.cardId),...(payload.pileIds||[]).flatMap(id=>(before.piles.find(pile=>pile.id===id)?.cards||[]).map(card=>card.id))];
+    const sourcePileIds=payload.type==='pile:absorb-to-discard'
+      ?before.piles.filter(pile=>pile.kind!=='deck'&&pile.kind!=='hand'&&pile.id!=='discard'&&pile.pileType!=='discard'&&pile.cards.length).map(pile=>pile.id)
+      :[...new Set([payload.fromId,payload.pileId,...(payload.cards||[]).map(item=>item.fromId),...(payload.pileIds||[])].filter(id=>typeof id==='string'&&id))];
+    const targetPileId=payload.toId||payload.targetId||(
+      payload.type==='discard:to-deck'?'deck':
+      ['return-card','return-stack'].includes(payload.type)?'deck':
+      payload.type==='discard:to-hand'?`hand-${playerId}`:
+      payload.type==='pile:absorb-to-discard'?(payload.pileId||'discard'):null
+    );
     io.to(`room:${room.id}`).emit('table:cue', {
       id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
       type: payload.type==='selection:move'?'move-cards':payload.type==='selection:flip'?'flip-cards':payload.type, playerId,
       cardIds:selectedCardIds,
-      pileId: ['draw','deal','shuffle'].includes(payload.type)?'deck':payload.pileId || payload.fromId || (payload.type === 'place' ? payload.targetId : null),
-      cardId: payload.cardId || null, toId: payload.toId || null,
+      pileId: ['draw','deal','shuffle'].includes(payload.type)?'deck':payload.pileId || payload.fromId || sourcePileIds[0] || null,
+      fromIds:sourcePileIds,
+      cardId: payload.cardId || null, toId: targetPileId,
+      targetId:payload.targetId||null,
+      targetPosition:['place','place-cards'].includes(payload.type)&&!payload.targetId&&Number.isFinite(Number(payload.x))&&Number.isFinite(Number(payload.y))?{x:Number(payload.x),y:Number(payload.y)}:null,
       recipientIds: drawRecipients,
       drawCount: drawCounts[playerId] || 0,
       drawCounts,

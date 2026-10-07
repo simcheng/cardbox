@@ -935,6 +935,7 @@
 .app-shell .drag-ghost .playing-card{transition:transform .12s ease-out,filter .12s ease-out;}
 .app-shell .playing-card.recent-touch{animation:recent-card-touch .95s ease-out both;}
 .app-shell .pile-zone.recent-touch .pile-cards{animation:recent-pile-touch .95s ease-out both;}
+.app-shell .table-surface.local-action .action-cue,.app-shell .table-surface.local-action .recent-touch{animation:none!important;}
 .table-turn-indicator{position:absolute;z-index:18;top:14px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:6px 9px 6px 11px;border:1px solid #d7e2d5;border-radius:12px;background:#f8fbf6e8;color:#294535;box-shadow:0 8px 22px #061b1438;pointer-events:none;white-space:nowrap;}
 .table-turn-indicator>span:not(.turn-dot){display:grid;gap:1px;line-height:1.05;}
 .table-turn-indicator small{font-size:10px;color:#607469;}
@@ -999,4 +1000,48 @@
 }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important;}
+}
+
+/* Keep the tabletop and its overlays inside the currently visible viewport,
+   including browser zoom and mobile browser chrome changes. */
+:root{--live-viewport-height:100dvh;--live-viewport-width:100vw;}
+.welcome{min-height:var(--live-viewport-height,100dvh);}
+.app-shell{height:var(--live-viewport-height,100dvh);min-height:0;overflow:hidden;}
+.app-shell .game-layout,.app-shell .play-area{height:calc(var(--live-viewport-height,100dvh) - 60px);min-height:0;}
+.app-shell .sidebar{height:var(--live-viewport-height,100dvh);max-height:var(--live-viewport-height,100dvh);}
+.app-shell .modal-shade,.app-shell .dialog-backdrop{min-height:var(--live-viewport-height,100dvh);}
+.app-shell .action-menu,.app-shell .extra-menu,.app-shell .table-context-menu,.app-shell .profile-popover,.app-shell .reaction-picker{max-height:min(72dvh,calc(var(--live-viewport-height,100dvh) - 16px));}
+.app-shell .action-dock .toolbar{max-width:min(calc(100vw - 16px),calc(var(--live-viewport-width,100vw) - 16px));}
+.app-shell .table-hand-zone,.app-shell .table-hand-zone *{min-width:0;}
+.app-shell .table-hand-zone.hand-collapsed{overflow:visible!important;}
+.app-shell .table-hand-zone .hand-tools{flex-wrap:wrap;}
+.app-shell .table-hand-cards{overscroll-behavior-x:contain;scrollbar-gutter:stable;}
+@media(max-width:700px){
+  .app-shell .topbar{height:54px;min-height:54px;}
+  .app-shell .game-layout,.app-shell .play-area{height:calc(var(--live-viewport-height,100dvh) - 54px);}
+  .app-shell .table-hand-zone{width:min(96%,900px);}
+  .app-shell .action-dock .toolbar{width:min(calc(var(--live-viewport-width,100vw) - 16px),500px);max-width:calc(var(--live-viewport-width,100vw) - 16px);}
+  .app-shell .hand-zone-header{grid-template-columns:minmax(0,1fr);}
+  .app-shell .table-hand-zone .hand-tools{justify-self:center;max-width:100%;}
+}
+@media(max-width:700px) and (max-height:520px){
+  .app-shell .topbar{height:48px;min-height:48px;}
+  .app-shell .game-layout,.app-shell .play-area{height:calc(var(--live-viewport-height,100dvh) - 48px);}
+  .app-shell .table-hand-zone{min-height:94px;}
+  .app-shell .table-hand-zone.hand-collapsed{height:42px;min-height:42px;}
+  .app-shell .table-hand-cards{min-height:64px;}
+  .app-shell .chat-fab{bottom:calc(env(safe-area-inset-bottom) + 110px);}
+}
+@media(max-width:390px){
+  .app-shell .topbar{gap:5px;padding-inline:7px;}
+  .app-shell .brand{gap:5px;font-size:12px!important;}
+  .app-shell .brand-mark{width:23px;height:23px;}
+  .app-shell .table-title{display:flex;width:min(30vw,132px);}
+  .app-shell .table-title b{max-width:100%;font-size:9px;}
+  .app-shell .table-title small{font-size:7px;}
+  .app-shell .top-actions{gap:3px;}
+  .app-shell .top-actions .invite-button,.app-shell .top-actions .settings-trigger,.app-shell .profile-control>.avatar{width:29px;height:29px;min-width:29px;min-height:29px;padding:0;}
+  .app-shell .table-hand-zone{padding-inline:4px;}
+  .app-shell .table-hand-zone .hand-tools{gap:3px;}
+  .app-shell .table-hand-zone .hand-tools button{padding-inline:5px;font-size:8px;}
 }

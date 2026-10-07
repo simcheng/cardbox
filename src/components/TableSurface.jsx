@@ -30,28 +30,37 @@ export default function TableSurface({
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone'),recipientSeat=surface?.querySelector(`[data-player-id="${cue.playerId}"]`);
       if(!surface||!deck)return;
-      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect(),destination=(cue.playerId===playerId?hand:recipientSeat);
+      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect();
+      const dealt=cue.type==='draw'?(cue.drawCount||1):(cue.drawCounts?.[playerId]||0);
+      const destination=cue.type==='draw'?recipientSeat:(cue.recipientIds?.includes(playerId)?hand:null);
       if(!destination)return;
       const h=destination.getBoundingClientRect();
-      const dealt=cue.drawCounts?.[playerId] ?? cue.drawCount ?? 1;
       if(dealt<1)return;
       setDrawFlight({id:cue.id,x:d.left+d.width/2-s.left-28.5,y:d.top+d.height/2-s.top-40,dx:h.left+h.width/2-(d.left+d.width/2),dy:h.top+h.height/2-(d.top+d.height/2),count:Math.min(3,dealt)});
     });
     return()=>cancelAnimationFrame(frame);
   },[cue?.id,playerId,tableRef]);
   useEffect(()=>{
-    const moving=['move','move-card','move-cards','move-stack','selection:move','place','place-cards','return-card','return-stack'].includes(cue?.type);
+    const moving=['move','move-card','move-cards','move-stack','selection:move','place','place-cards','return-card','return-stack','discard:to-deck','discard:to-hand','pile:absorb-to-discard'].includes(cue?.type);
     if(!moving||cue.playerId===playerId){setMoveFlight(null);return;}
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current;if(!surface)return;
       const bounds=surface.getBoundingClientRect();
       const center=(element)=>{const rect=element?.getBoundingClientRect();return rect?{x:rect.left+rect.width/2-bounds.left,y:rect.top+rect.height/2-bounds.top}:null;};
-      const sourceEl=cue.pileId?surface.querySelector(`[data-place-id="${CSS.escape(cue.pileId)}"]`):null;
-      const destinationId=cue.toId||(cue.type==='return-card'||cue.type==='return-stack'?'deck':(cue.type==='place'||cue.type==='place-cards'?cue.pileId:null));
-      const destinationEl=destinationId?surface.querySelector(`[data-place-id="${CSS.escape(destinationId)}"]`):null;
-      const hand=surface.querySelector('.table-hand-zone');
-      const start=center(sourceEl)||center(surface.querySelector('[data-place-id="deck"]'))||{x:bounds.width/2,y:bounds.height/2};
-      const end=center(destinationEl)||center(hand)||{x:bounds.width/2,y:bounds.height/2};
+      const elementForId=(id)=>{
+        if(!id)return null;
+        if(id.startsWith('hand-'))return id===`hand-${playerId}`?surface.querySelector('.table-hand-zone'):surface.querySelector(`[data-player-id="${CSS.escape(id.slice(5))}"]`);
+        return surface.querySelector(`[data-place-id="${CSS.escape(id)}"]`);
+      };
+      const sourceCenters=(cue.fromIds||[cue.pileId]).map(elementForId).map(center).filter(Boolean);
+      const start=sourceCenters.length?sourceCenters.reduce((sum,point)=>({x:sum.x+point.x/sourceCenters.length,y:sum.y+point.y/sourceCenters.length}),{x:0,y:0}):center(surface.querySelector('[data-place-id="deck"]'))||{x:bounds.width/2,y:bounds.height/2};
+      const destinationId=cue.toId||cue.targetId;
+      const destinationEl=elementForId(destinationId);
+      const targetPosition=cue.targetPosition;
+      const radians=viewAngle*Math.PI/180;
+      const viewX=targetPosition?50+(targetPosition.x-50)*Math.cos(radians)-(targetPosition.y-50)*Math.sin(radians):null;
+      const viewY=targetPosition?50+(targetPosition.x-50)*Math.sin(radians)+(targetPosition.y-50)*Math.cos(radians):null;
+      const end=center(destinationEl)||(targetPosition?{x:viewX/100*bounds.width,y:viewY/100*bounds.height}:null)||center(surface.querySelector('.table-hand-zone'))||{x:bounds.width/2,y:bounds.height/2};
       setMoveFlight({id:cue.id,start,end,count:Math.max(1,Math.min(5,cue.cardIds?.length||1))});
     });
     const timer=setTimeout(()=>setMoveFlight(null),760);
@@ -80,7 +89,7 @@ export default function TableSurface({
   });
   const cueClass = cue?.playerId===playerId?'':cue?.type==='deal'?'draw':cue?.type?.replaceAll(':','-');
   const turnRemaining=room?.turn?.deadlineAt?Math.max(0,Math.ceil((room.turn.deadlineAt-turnClock)/1000)):null;
-  return <div className="table-wrap">{room.turn?.enabled&&<div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}><span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`:'Time expired'}</small>}</span></div>}<div className="table-surface" ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
+  return <div className="table-wrap">{room.turn?.enabled&&<div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}><span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`:'Time expired'}</small>}</span></div>}<div className={`table-surface ${cue?.playerId===playerId?'local-action':''}`} ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
     <div className="table-seam"/>
     {(dragCardId||pileDrag?.pileId)&&<div className="placement-boundary" aria-hidden="true"/>}
     {seats.map(({player,x,y})=><div data-player-id={player.id} className={`seat ${cue?.playerId!==playerId&&(cue?.playerId===player.id||cue?.recipientIds?.includes(player.id))?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
@@ -128,8 +137,8 @@ export default function TableSurface({
       const pileX=surfaceWidth?Math.min(100-marginX,Math.max(marginX,rawX)):rawX;
       const pileY=surfaceHeight?Math.min(100-marginBottom,Math.max(marginTop,rawY)):rawY;
       const cardsToShow=isFan?pile.cards:pile.cards.slice(pile.kind==='tableau'?-8:-3);
-      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'||pile.pileType==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${selectedPileIds.includes(pile.id)?'selected-pile':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.toId===pile.id?`action-${cueClass}`:''} ${cue?.pileId===pile.id||cue?.toId===pile.id?'recent-touch':''}`} style={{left:`${pileX}%`,top:`${pileY}%`,'--fan-width':`${fanWidth}px`,'--fan-height':`${fanHeight}px`,...fanControlStyle}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
-      <div className="pile-cards" style={{...(isFan?{width:`${fanWidth}px`,height:`${fanHeight}px`}:{}),transform:`rotate(${viewAngle}deg)`}}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard?.get(card.id)||{group:0,index,row:0,count:cardsToShow.length,z:index};const fanStyle=isFan?{'--fan':meta.index,'--fan-row':meta.row,'--fan-order':meta.order??meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-row-step':`${rowStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.z}:undefined;return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggedCardIds.includes(card.id)} actionCue={cue?.cardId===card.id||cue?.cardIds?.includes(card.id)} recent={cue?.cardId===card.id||cue?.cardIds?.includes(card.id)} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
+      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'||pile.pileType==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${selectedPileIds.includes(pile.id)?'selected-pile':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.playerId!==playerId&&cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.playerId!==playerId&&cue?.toId===pile.id?`action-${cueClass}`:''} ${cue?.playerId!==playerId&&(cue?.pileId===pile.id||cue?.toId===pile.id)?'recent-touch':''}`} style={{left:`${pileX}%`,top:`${pileY}%`,'--fan-width':`${fanWidth}px`,'--fan-height':`${fanHeight}px`,...fanControlStyle}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
+      <div className="pile-cards" style={{...(isFan?{width:`${fanWidth}px`,height:`${fanHeight}px`}:{}),transform:`rotate(${viewAngle}deg)`}}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard?.get(card.id)||{group:0,index,row:0,count:cardsToShow.length,z:index};const fanStyle=isFan?{'--fan':meta.index,'--fan-row':meta.row,'--fan-order':meta.order??meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-row-step':`${rowStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.z}:undefined;const actionVisible=cue?.playerId!==playerId&&(cue?.cardId===card.id||cue?.cardIds?.includes(card.id));return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggedCardIds.includes(card.id)} actionCue={actionVisible} recent={actionVisible} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
       {pile.kind==='tableau'&&pile.cards.length>1&&<span className="stack-count" style={{top:'31px',left:'calc(50% + 12px)',right:'auto',bottom:'auto',transform:'none'}} aria-label={`${pile.cards.length} cards in stack`}>{pile.cards.length}</span>}
       {pile.kind!=='tableau'&&<span className="pile-label">{pile.name}{pile.cards.length>1&&<small>{pile.cards.length} cards</small>}</span>}
       <button className={`pile-grab ${pile.kind==='tableau'?'tableau-grab':''}`} aria-label={`Move ${pile.name||'card stack'}`} title="Drag to move; double click to toggle fan" onClick={(event)=>event.stopPropagation()} onPointerDown={(event)=>{event.stopPropagation();onPilePointerDown(event,pile)}} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel} onDoubleClick={(event)=>{event.stopPropagation();if(pile.kind==='tableau')onOpenContextMenu(event,{pileId:pile.id,quickLayout:true});}}>⠿</button>

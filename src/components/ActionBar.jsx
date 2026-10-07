@@ -26,9 +26,9 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     if(!open)return;
     let frame=0;
     const reposition=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>positionMenu());};
-    reposition();window.addEventListener('resize',reposition);window.addEventListener('scroll',reposition,true);
+    const viewport=window.visualViewport;reposition();window.addEventListener('resize',reposition);window.addEventListener('scroll',reposition,true);viewport?.addEventListener('resize',reposition);viewport?.addEventListener('scroll',reposition);
     const observer=menuRef.current?new ResizeObserver(reposition):null;if(observer&&menuRef.current)observer.observe(menuRef.current);
-    return()=>{cancelAnimationFrame(frame);observer?.disconnect();window.removeEventListener('resize',reposition);window.removeEventListener('scroll',reposition,true);};
+    return()=>{cancelAnimationFrame(frame);observer?.disconnect();window.removeEventListener('resize',reposition);window.removeEventListener('scroll',reposition,true);viewport?.removeEventListener('resize',reposition);viewport?.removeEventListener('scroll',reposition);};
   },[open,offset,confirmReset,selectedCount]);
   useEffect(()=>{
     const resize=()=>{

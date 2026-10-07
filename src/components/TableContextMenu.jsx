@@ -18,9 +18,9 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
       setPosition({left,top,right:'auto',bottom:'auto',width:'min(224px, calc(100vw - 16px))',maxHeight:`${window.innerHeight-16}px`});
     };
     place();
-    const observer=new ResizeObserver(place);observer.observe(element);
-    window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
-    return()=>{observer.disconnect();window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);};
+    const observer=new ResizeObserver(place),viewport=window.visualViewport;observer.observe(element);
+    window.addEventListener('resize',place);window.addEventListener('scroll',place,true);viewport?.addEventListener('resize',place);viewport?.addEventListener('scroll',place);
+    return()=>{observer.disconnect();window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);viewport?.removeEventListener('resize',place);viewport?.removeEventListener('scroll',place);};
   },[menu?.pileId,menu?.cardId,menu?.x,menu?.y,pile?.name,renaming]);
   if (!menu || !pile) return null;
   const handId = `hand-${playerId}`;
