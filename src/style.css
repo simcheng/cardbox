@@ -910,12 +910,9 @@
 .app-shell .table-hand-zone .table-hand-label{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:flex-start;gap:12px;min-width:0;}
 .app-shell .table-hand-label>span{display:inline-flex;align-items:center;gap:9px;min-width:0;}
 .app-shell .table-hand-label>span>b{flex:none;}
-.app-shell .table-hand-label .hand-visibility-toggle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:30px;min-height:30px;flex:none;border:0;border-left:1px solid #ffffff2b;border-radius:0 8px 8px 0;background:#ffffff0d;color:#f6f2db;font-size:15px;box-shadow:none;}
-.app-shell .table-hand-label .hand-visibility-toggle:hover{background:#ffffff1e;}
 .app-shell .table-hand-zone .hand-tools{grid-column:2;grid-row:1;display:flex;justify-self:end;align-items:center;min-width:0;}
 .app-shell .table-hand-zone{overflow:visible;}
 .app-shell .table-hand-zone .hand-zone-header{min-height:38px;}
-.app-shell .table-hand-label .hand-visibility-toggle{top:-17px;}
 .app-shell .table-hand-zone.hand-collapsed .hand-visibility-toggle{top:-17px;}
 .app-shell .layout-fan .pile-cards .playing-card:hover,.app-shell .layout-fan-stack .pile-cards .playing-card:hover{filter:drop-shadow(0 5px 6px #031b1466);}
 .app-shell .layout-fan .pile-cards .playing-card.selected-card,.app-shell .layout-fan-stack .pile-cards .playing-card.selected-card{filter:drop-shadow(0 6px 7px #031b1477);}
@@ -986,7 +983,6 @@
   .app-shell .table-hand-zone .table-hand-label{grid-column:1;grid-row:1;justify-content:flex-start;}
   .app-shell .table-hand-zone .hand-tools{grid-column:1;grid-row:2;justify-self:center;max-width:100%;flex-wrap:wrap;justify-content:center;}
   .app-shell .table-hand-zone .hand-tools .hand-draw{min-width:112px;}
-  .app-shell .table-hand-label .hand-visibility-toggle{left:50%;top:-16px;width:28px;height:28px;min-height:28px;transform:translateX(-50%);}
   .app-shell .pile-zone .pile-menu-button,.app-shell .pile-zone .pile-grab{top:-23px;width:22px;height:22px;min-width:22px;min-height:22px;}
   .app-shell .pile-zone.layout-fan .pile-menu-button,.app-shell .pile-zone.layout-fan-stack .pile-menu-button,.app-shell .pile-zone.layout-fan .pile-grab,.app-shell .pile-zone.layout-fan-stack .pile-grab{width:22px;height:22px;min-width:22px;min-height:22px;}
   .welcome-card.invite-join-card .welcome-join-row{grid-template-columns:minmax(0,1fr);}
@@ -1011,6 +1007,14 @@
 .app-shell .sidebar{height:var(--live-viewport-height,100dvh);max-height:var(--live-viewport-height,100dvh);}
 .app-shell .modal-shade,.app-shell .dialog-backdrop{min-height:var(--live-viewport-height,100dvh);}
 .app-shell .action-menu,.app-shell .extra-menu,.app-shell .table-context-menu,.app-shell .profile-popover,.app-shell .reaction-picker{max-height:min(72dvh,calc(var(--live-viewport-height,100dvh) - 16px));}
+.app-shell .hand-visibility-toggle{position:absolute;z-index:18;left:50%;right:auto;top:-14px;bottom:auto;transform:translateX(-50%);width:32px;height:28px;min-width:32px;min-height:28px;padding:0;display:grid;place-items:center;border:1px solid #ffffff55;border-radius:999px 999px 5px 5px;background:#133f30;color:#f6f2db;line-height:1;}
+.app-shell .table-hand-zone.hand-collapsed .hand-visibility-toggle{top:-14px;}
+.app-shell .playing-card.recent-touch{outline:2px solid #f4d783;outline-offset:2px;box-shadow:0 0 0 4px #f4d78342,0 7px 17px #061b1480;animation:none!important;}
+.app-shell .pile-zone.recent-touch .pile-cards{filter:drop-shadow(0 0 7px #f4d783b0);animation:none!important;}
+.app-shell .table-surface.local-action .action-cue{animation:none!important;}
+.app-shell .modal-shade,.app-shell .dialog-backdrop{height:var(--live-viewport-height,100dvh);max-height:var(--live-viewport-height,100dvh);min-height:0;box-sizing:border-box;}
+.app-shell .settings-modal,.app-shell .invite-modal,.app-shell .ledger-modal{box-sizing:border-box;min-width:0;max-width:calc(100vw - 16px);max-height:calc(var(--live-viewport-height,100dvh) - 16px);}
+.app-shell .profile-popover,.app-shell .action-menu,.app-shell .extra-menu,.app-shell .table-context-menu,.app-shell .reaction-picker{box-sizing:border-box;max-width:calc(var(--live-viewport-width,100vw) - 16px);overflow-x:hidden;overflow-y:auto;}
 .app-shell .action-dock .toolbar{max-width:min(calc(100vw - 16px),calc(var(--live-viewport-width,100vw) - 16px));}
 .app-shell .table-hand-zone,.app-shell .table-hand-zone *{min-width:0;}
 .app-shell .table-hand-zone.hand-collapsed{overflow:visible!important;}
@@ -1044,4 +1048,9 @@
   .app-shell .table-hand-zone{padding-inline:4px;}
   .app-shell .table-hand-zone .hand-tools{gap:3px;}
   .app-shell .table-hand-zone .hand-tools button{padding-inline:5px;font-size:8px;}
+}
+@media(max-width:700px){
+  .app-shell .hand-visibility-toggle{top:-13px;width:30px;height:26px;min-width:30px;min-height:26px;}
+  .app-shell .table-hand-zone.hand-collapsed .hand-visibility-toggle{top:-13px;}
+  .app-shell .modal-shade,.app-shell .dialog-backdrop{padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));}
 }

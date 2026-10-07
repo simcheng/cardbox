@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { visibleViewport } from '../utils/viewport.js';
 
 export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selectedCount, canAbsorb = false, onAction, onFlipSelected, onLedger, onMoveSelection, onClearSelection }) {
   const [open, setOpen] = useState(false), [dealCount, setDealCount] = useState(1), [dealEachCount,setDealEachCount]=useState(1), [menuPosition,setMenuPosition]=useState({}), [opensUp, setOpensUp] = useState(true), [opensLeft,setOpensLeft]=useState(true), [menuMaxHeight,setMenuMaxHeight]=useState(360), [confirmReset, setConfirmReset] = useState(false), [offset, setOffset] = useState({x:0,y:0}), [dragging, setDragging] = useState(false);
@@ -12,15 +13,15 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     if(!anchor)return;
     const rect=anchor.getBoundingClientRect();
     const menuRect=menuRef.current?.getBoundingClientRect();
-    const menuWidth=Math.min(menuRect?.width||270,window.innerWidth-16),roomRight=window.innerWidth-rect.left-8,roomLeft=rect.right-8;
-    const left=roomRight>=menuWidth?rect.left:roomLeft>=menuWidth?rect.right-menuWidth:Math.max(8,Math.min(window.innerWidth-menuWidth-8,rect.left));
+    const viewport=visibleViewport(),menuWidth=Math.min(menuRect?.width||270,viewport.width-16),roomRight=viewport.right-rect.left-8,roomLeft=rect.right-viewport.left-8;
+    const left=roomRight>=menuWidth?rect.left:roomLeft>=menuWidth?rect.right-menuWidth:Math.max(viewport.left+8,Math.min(viewport.right-menuWidth-8,rect.left));
     setOpensLeft(left<rect.left);
-    const above=Math.max(0,rect.top-12),below=Math.max(0,window.innerHeight-rect.bottom-12);
-    const showAbove=below<Math.min(220,window.innerHeight*.4)&&above>below;
-    const available=Math.max(1,Math.min(showAbove?above:below,window.innerHeight-16));
+    const above=Math.max(0,rect.top-viewport.top-12),below=Math.max(0,viewport.bottom-rect.bottom-12);
+    const showAbove=below<Math.min(220,viewport.height*.4)&&above>below;
+    const available=Math.max(1,Math.min(showAbove?above:below,viewport.height-16));
     setOpensUp(showAbove);setMenuMaxHeight(available);
     const height=Math.min(menuRect?.height||available,available);
-    setMenuPosition({position:'fixed',left,top:showAbove?Math.max(8,rect.top-height-8):Math.min(window.innerHeight-height-8,rect.bottom+8),right:'auto',bottom:'auto',width:menuWidth,maxHeight:`${available}px`});
+    setMenuPosition({position:'fixed',left,top:showAbove?Math.max(viewport.top+8,rect.top-height-8):Math.min(viewport.bottom-height-8,rect.bottom+8),right:'auto',bottom:'auto',width:menuWidth,maxHeight:`${available}px`});
   }
   useEffect(()=>{
     if(!open)return;
@@ -34,14 +35,15 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     const resize=()=>{
       const rect=toolbarRef.current?.getBoundingClientRect();if(!rect)return;
       const undo=undoRef.current?.getBoundingClientRect();
-      let dx=rect.left<8?8-rect.left:rect.right>window.innerWidth-8?window.innerWidth-8-rect.right:0;
-      let dy=rect.top<8?8-rect.top:rect.bottom>window.innerHeight-8?window.innerHeight-8-rect.bottom:0;
+      const viewport=visibleViewport();
+      let dx=rect.left<viewport.left+8?viewport.left+8-rect.left:rect.right>viewport.right-8?viewport.right-8-rect.right:0;
+      let dy=rect.top<viewport.top+8?viewport.top+8-rect.top:rect.bottom>viewport.bottom-8?viewport.bottom-8-rect.bottom:0;
       if(undo&&rect.left<undo.right&&rect.right>undo.left&&rect.top<undo.bottom&&rect.bottom>undo.top)dx=rect.left<undo.left?undo.left-rect.right-8:undo.right-rect.left+8;
-      dx=Math.min(window.innerWidth-8-rect.right,Math.max(8-rect.left,dx));
-      dy=Math.min(window.innerHeight-8-rect.bottom,Math.max(8-rect.top,dy));
+      dx=Math.min(viewport.right-8-rect.right,Math.max(viewport.left+8-rect.left,dx));
+      dy=Math.min(viewport.bottom-8-rect.bottom,Math.max(viewport.top+8-rect.top,dy));
       if(dx||dy)setOffset(current=>({x:current.x+dx,y:current.y+dy}));
     };
-    window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize);
+    const viewport=window.visualViewport;window.addEventListener('resize',resize);viewport?.addEventListener('resize',resize);viewport?.addEventListener('scroll',resize);return()=>{window.removeEventListener('resize',resize);viewport?.removeEventListener('resize',resize);viewport?.removeEventListener('scroll',resize);};
   },[]);
   function onGripDown(event) {
     if(event.button!==undefined&&event.button!==0)return;
@@ -54,8 +56,9 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;
     const dx=event.clientX-drag.startX,dy=event.clientY-drag.startY;
     const originLeft=drag.rect.left-drag.base.x,originTop=drag.rect.top-drag.base.y;
-    const minX=8-originLeft,maxX=window.innerWidth-8-(drag.rect.right-drag.base.x);
-    const minY=8-originTop,maxY=window.innerHeight-8-(drag.rect.bottom-drag.base.y);
+    const viewport=visibleViewport();
+    const minX=viewport.left+8-originLeft,maxX=viewport.right-8-(drag.rect.right-drag.base.x);
+    const minY=viewport.top+8-originTop,maxY=viewport.bottom-8-(drag.rect.bottom-drag.base.y);
     const undo=undoRef.current?.getBoundingClientRect();
     let nextX=Math.min(maxX,Math.max(minX,drag.base.x+dx)),nextY=Math.min(maxY,Math.max(minY,drag.base.y+dy));
     if(undo){const nextRect={left:originLeft+nextX,right:drag.rect.right-drag.base.x+nextX,top:originTop+nextY,bottom:drag.rect.bottom-drag.base.y+nextY};if(nextRect.left<undo.right&&nextRect.right>undo.left&&nextRect.top<undo.bottom&&nextRect.bottom>undo.top){const left=undo.left-(drag.rect.right-drag.rect.left)-8-originLeft,right=undo.right+8-originLeft;nextX=Math.max(minX,Math.min(maxX,Math.abs(left-nextX)<Math.abs(right-nextX)?left:right));}}

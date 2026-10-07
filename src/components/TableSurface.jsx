@@ -1,6 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Card from './Card.jsx';
 
+function objectCenter(surface, element) {
+  if (!surface || !element) return null;
+  const bounds = surface.getBoundingClientRect();
+  const visualTarget = element.classList?.contains('seat')
+    ? element.querySelector('.seat-avatar')
+    : element.classList?.contains('table-hand-zone')
+      ? element.querySelector('.table-hand-cards') || element
+      : element;
+  const cards = visualTarget.matches?.('.pile-zone,.table-hand-zone')
+    ? [...visualTarget.querySelectorAll('.pile-cards .playing-card,.table-hand-cards .playing-card')]
+    : [];
+  const rects = cards.map(card => card.getBoundingClientRect());
+  const rect = rects.length
+    ? {
+        left: Math.min(...rects.map(item => item.left)),
+        right: Math.max(...rects.map(item => item.right)),
+        top: Math.min(...rects.map(item => item.top)),
+        bottom: Math.max(...rects.map(item => item.bottom)),
+      }
+    : visualTarget.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2 - bounds.left, y: rect.top + rect.height / 2 - bounds.top };
+}
+
 export default function TableSurface({
   room, playerId, tableRef, selectedIds = [], selectedPileIds = [], preview, previewCard, previewCount = 1, dragCount = 1, pileDrag, selectionBox,
   handZone, onSurfaceClick, onCardClick, onPileClick,
@@ -9,7 +32,14 @@ export default function TableSurface({
   onOpenContextMenu, dragCardId, dragPosition, dragOverHand, contextCardId, cue,
   onConfirmPlacement, onCancelPlacement, pendingPlacement, dragGhostRef, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel, draggedCardIds = [],
 }) {
-  const [drawFlight,setDrawFlight]=useState(null),[moveFlight,setMoveFlight]=useState(null),[turnClock,setTurnClock]=useState(Date.now());
+  const [drawFlight,setDrawFlight]=useState(null),[moveFlight,setMoveFlight]=useState(null),[turnClock,setTurnClock]=useState(Date.now()),[lastTouched,setLastTouched]=useState(null);
+  useEffect(()=>{
+    if(!cue?.id||['chat','chat:react','turn:start','turn:next'].includes(cue.type))return;
+    const cardIds=new Set([...(cue.cardIds||[]),...(cue.cardId?[cue.cardId]:[])]);
+    const pileIds=new Set([...(cue.fromIds||[]),...(cue.pileId?[cue.pileId]:[]),...(cue.toId?[cue.toId]:[]),...(cue.targetId?[cue.targetId]:[])]);
+    if(!cardIds.size&&!pileIds.size)return;
+    setLastTouched({id:cue.id,cardIds,pileIds});
+  },[cue?.id]);
   useEffect(()=>{if(!room?.turn?.enabled||!room.turn.deadlineAt)return;const timer=setInterval(()=>setTurnClock(Date.now()),250);return()=>clearInterval(timer);},[room?.turn?.enabled,room?.turn?.deadlineAt]);
   const [surfaceSize,setSurfaceSize]=useState({width:0,height:0});
   useEffect(()=>{
@@ -30,13 +60,13 @@ export default function TableSurface({
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone'),recipientSeat=surface?.querySelector(`[data-player-id="${cue.playerId}"]`);
       if(!surface||!deck)return;
-      const s=surface.getBoundingClientRect(),d=deck.getBoundingClientRect();
       const dealt=cue.type==='draw'?(cue.drawCount||1):(cue.drawCounts?.[playerId]||0);
       const destination=cue.type==='draw'?recipientSeat:(cue.recipientIds?.includes(playerId)?hand:null);
       if(!destination)return;
-      const h=destination.getBoundingClientRect();
       if(dealt<1)return;
-      setDrawFlight({id:cue.id,x:d.left+d.width/2-s.left-28.5,y:d.top+d.height/2-s.top-40,dx:h.left+h.width/2-(d.left+d.width/2),dy:h.top+h.height/2-(d.top+d.height/2),count:Math.min(3,dealt)});
+      const start=objectCenter(surface,deck),end=objectCenter(surface,destination);
+      if(!start||!end)return;
+      setDrawFlight({id:cue.id,x:start.x-28.5,y:start.y-40,dx:end.x-start.x,dy:end.y-start.y,count:Math.min(3,dealt)});
     });
     return()=>cancelAnimationFrame(frame);
   },[cue?.id,playerId,tableRef]);
@@ -46,7 +76,7 @@ export default function TableSurface({
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current;if(!surface)return;
       const bounds=surface.getBoundingClientRect();
-      const center=(element)=>{const rect=element?.getBoundingClientRect();return rect?{x:rect.left+rect.width/2-bounds.left,y:rect.top+rect.height/2-bounds.top}:null;};
+      const center=(element)=>objectCenter(surface,element);
       const elementForId=(id)=>{
         if(!id)return null;
         if(id.startsWith('hand-'))return id===`hand-${playerId}`?surface.querySelector('.table-hand-zone'):surface.querySelector(`[data-player-id="${CSS.escape(id.slice(5))}"]`);
@@ -61,7 +91,7 @@ export default function TableSurface({
       const viewX=targetPosition?50+(targetPosition.x-50)*Math.cos(radians)-(targetPosition.y-50)*Math.sin(radians):null;
       const viewY=targetPosition?50+(targetPosition.x-50)*Math.sin(radians)+(targetPosition.y-50)*Math.cos(radians):null;
       const end=center(destinationEl)||(targetPosition?{x:viewX/100*bounds.width,y:viewY/100*bounds.height}:null)||center(surface.querySelector('.table-hand-zone'))||{x:bounds.width/2,y:bounds.height/2};
-      setMoveFlight({id:cue.id,start,end,count:Math.max(1,Math.min(5,cue.cardIds?.length||1))});
+      setMoveFlight({id:cue.id,start:{x:start.x-28.5,y:start.y-40},end:{x:end.x-28.5,y:end.y-40},count:Math.max(1,Math.min(5,cue.cardIds?.length||1))});
     });
     const timer=setTimeout(()=>setMoveFlight(null),760);
     return()=>{cancelAnimationFrame(frame);clearTimeout(timer);};
@@ -81,7 +111,7 @@ export default function TableSurface({
   const selectedSignature=selectedIds.join('\0');
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedSignature]);
   const selfIndex = Math.max(0, activePlayers.findIndex(player=>player.id===playerId));
-  const viewAngle=360*selfIndex/Math.max(1,playerCount),viewRadians=viewAngle*Math.PI/180;
+  const viewAngle=-360*selfIndex/Math.max(1,playerCount),viewRadians=viewAngle*Math.PI/180;
   const seats = opponents.map((player)=>{
     const index = activePlayers.findIndex(item=>item.id===player.id);
     const angle = (90 + 360 * (index-selfIndex) / Math.max(1,playerCount)) * Math.PI / 180;
@@ -137,8 +167,8 @@ export default function TableSurface({
       const pileX=surfaceWidth?Math.min(100-marginX,Math.max(marginX,rawX)):rawX;
       const pileY=surfaceHeight?Math.min(100-marginBottom,Math.max(marginTop,rawY)):rawY;
       const cardsToShow=isFan?pile.cards:pile.cards.slice(pile.kind==='tableau'?-8:-3);
-      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'||pile.pileType==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${selectedPileIds.includes(pile.id)?'selected-pile':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.playerId!==playerId&&cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.playerId!==playerId&&cue?.toId===pile.id?`action-${cueClass}`:''} ${cue?.playerId!==playerId&&(cue?.pileId===pile.id||cue?.toId===pile.id)?'recent-touch':''}`} style={{left:`${pileX}%`,top:`${pileY}%`,'--fan-width':`${fanWidth}px`,'--fan-height':`${fanHeight}px`,...fanControlStyle}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
-      <div className="pile-cards" style={{...(isFan?{width:`${fanWidth}px`,height:`${fanHeight}px`}:{}),transform:`rotate(${viewAngle}deg)`}}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard?.get(card.id)||{group:0,index,row:0,count:cardsToShow.length,z:index};const fanStyle=isFan?{'--fan':meta.index,'--fan-row':meta.row,'--fan-order':meta.order??meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-row-step':`${rowStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.z}:undefined;const actionVisible=cue?.playerId!==playerId&&(cue?.cardId===card.id||cue?.cardIds?.includes(card.id));return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggedCardIds.includes(card.id)} actionCue={actionVisible} recent={actionVisible} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
+      return <div key={pile.id} data-place-id={pile.id} className={`pile-zone ${pile.id==='discard'||pile.pileType==='discard'?'discard-pile':''} ${pile.kind==='tableau'?'tableau-zone':''} ${pile.kind==='tableau'?`layout-${pile.layout||'grid'}`:''} ${selectedIds.length?'drop-ready':''} ${selectedPileIds.includes(pile.id)?'selected-pile':''} ${pileDrag?.targetId===pile.id?'pile-drop-target':''} ${cue?.playerId!==playerId&&cue?.pileId===pile.id?`action-${cueClass}`:''} ${cue?.playerId!==playerId&&cue?.toId===pile.id?`action-${cueClass}`:''} ${lastTouched?.pileIds.has(pile.id)?'recent-touch':''}`} style={{left:`${pileX}%`,top:`${pileY}%`,'--fan-width':`${fanWidth}px`,'--fan-height':`${fanHeight}px`,...fanControlStyle}} onClick={(event)=>onPileClick(event,pile)} onContextMenu={(event)=>{event.preventDefault();onOpenContextMenu(event,{pileId:pile.id})}} onPointerDown={(event)=>onPilePointerDown(event,pile)} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel}>
+      <div className="pile-cards" style={{...(isFan?{width:`${fanWidth}px`,height:`${fanHeight}px`}:{}),transform:`rotate(${viewAngle}deg)`}}>{pile.cards.length>0?<>{cardsToShow.map((card,index)=>{const meta=groupByCard?.get(card.id)||{group:0,index,row:0,count:cardsToShow.length,z:index};const fanStyle=isFan?{'--fan':meta.index,'--fan-row':meta.row,'--fan-order':meta.order??meta.index,'--fan-count':meta.count,'--fan-step':`${fanStep}px`,'--fan-row-step':`${rowStep}px`,'--fan-group-y-step':`${-groupYStep}px`,'--fan-center':(meta.count-1)/2,'--fan-group':meta.group,'--fan-group-step':`${groupStep}px`,'--fan-z':meta.z}:undefined;const actionVisible=cue?.playerId!==playerId&&(cue?.cardId===card.id||cue?.cardIds?.includes(card.id));return <Card key={card.id} card={card} index={index} style={fanStyle} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggedCardIds.includes(card.id)} actionCue={actionVisible} recent={lastTouched?.cardIds.has(card.id)} onClick={(event)=>onCardClick(card,pile.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:pile.id,cardId:card.id})} onPointerDown={(event)=>onCardPointerDown(event,card,pile.id)} onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp} onPointerCancel={onCardPointerCancel}/>})}</>:pile.id==='deck'?<div className="empty-deck empty-deck-empty">Deck empty</div>:<div className="empty-pile">Drop cards here</div>}</div>
       {pile.kind==='tableau'&&pile.cards.length>1&&<span className="stack-count" style={{top:'31px',left:'calc(50% + 12px)',right:'auto',bottom:'auto',transform:'none'}} aria-label={`${pile.cards.length} cards in stack`}>{pile.cards.length}</span>}
       {pile.kind!=='tableau'&&<span className="pile-label">{pile.name}{pile.cards.length>1&&<small>{pile.cards.length} cards</small>}</span>}
       <button className={`pile-grab ${pile.kind==='tableau'?'tableau-grab':''}`} aria-label={`Move ${pile.name||'card stack'}`} title="Drag to move; double click to toggle fan" onClick={(event)=>event.stopPropagation()} onPointerDown={(event)=>{event.stopPropagation();onPilePointerDown(event,pile)}} onPointerMove={onPilePointerMove} onPointerUp={onPilePointerUp} onPointerCancel={onPilePointerCancel} onDoubleClick={(event)=>{event.stopPropagation();if(pile.kind==='tableau')onOpenContextMenu(event,{pileId:pile.id,quickLayout:true});}}>⠿</button>

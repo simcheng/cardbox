@@ -12,6 +12,7 @@ import ProfileMenu from './components/ProfileMenu.jsx';
 import LedgerDialog from './components/LedgerDialog.jsx';
 import { resolveTablePlacement } from './game/tableRules.js';
 import { listDecks } from '../shared/deckDefinitions.js';
+import { visibleViewport } from './utils/viewport.js';
 import './style.css';
 
 const socket = io(import.meta.env.DEV ? (import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000') : undefined, { autoConnect: true });
@@ -80,7 +81,7 @@ function App() {
   }
   useEffect(()=>{const media=window.matchMedia?.('(prefers-color-scheme: dark)');if(!media)return;const update=()=>setSystemTheme(media.matches?'dark':'light');update();media.addEventListener?.('change',update);return()=>media.removeEventListener?.('change',update);},[]);
   function setColorTheme(next) { setThemeMode(next); if(next==='system')localStorage.removeItem('cardtable:theme');else localStorage.setItem('cardtable:theme', next); }
-  function viewRotation(){const players=room?.players.filter(player=>player.online||player.id===playerId)||[],index=Math.max(0,players.findIndex(player=>player.id===playerId));return 360*index/Math.max(1,players.length);}
+  function viewRotation(){const players=room?.players.filter(player=>player.online||player.id===playerId)||[],index=Math.max(0,players.findIndex(player=>player.id===playerId));return -360*index/Math.max(1,players.length);}
   function viewToTablePoint(x,y){const angle=-viewRotation()*Math.PI/180,dx=x-50,dy=y-50;return{x:50+dx*Math.cos(angle)-dy*Math.sin(angle),y:50+dx*Math.sin(angle)+dy*Math.cos(angle)};}
   function moveTablePointByViewDelta(pile,dx,dy){const angle=-viewRotation()*Math.PI/180;return{x:pile.x+dx*Math.cos(angle)-dy*Math.sin(angle),y:pile.y+dx*Math.sin(angle)+dy*Math.cos(angle)};}
 
@@ -130,6 +131,8 @@ function App() {
     const viewport=window.visualViewport;
     const update=()=>{
       const height=Math.round(viewport?.height||window.innerHeight);
+      document.documentElement.style.setProperty('--live-viewport-top',`${Math.round(viewport?.offsetTop||0)}px`);
+      document.documentElement.style.setProperty('--live-viewport-left',`${Math.round(viewport?.offsetLeft||0)}px`);
       document.documentElement.style.setProperty('--live-viewport-height',`${height}px`);
       document.documentElement.style.setProperty('--live-viewport-width',`${Math.round(viewport?.width||window.innerWidth)}px`);
     };
@@ -198,12 +201,13 @@ function App() {
     let frame=0;
     const place=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
       const anchor=tableActionsButtonRef.current,element=tableActionsMenuRef.current;if(!anchor||!element)return;
-      const rect=anchor.getBoundingClientRect(),menuRect=element.getBoundingClientRect(),pad=8,gap=7;
-      const width=Math.min(menuRect.width,window.innerWidth-pad*2),height=Math.min(menuRect.height,window.innerHeight-pad*2);
-      const left=Math.max(pad,Math.min(window.innerWidth-width-pad,rect.left));
-      const below=window.innerHeight-rect.bottom-pad-gap,above=rect.top-pad-gap;
+      const viewport=visibleViewport(),rect=anchor.getBoundingClientRect(),menuRect=element.getBoundingClientRect(),pad=8,gap=7;
+      const width=Math.min(menuRect.width,viewport.width-pad*2),height=Math.min(menuRect.height,viewport.height-pad*2);
+      const left=Math.max(viewport.left+pad,Math.min(viewport.right-width-pad,rect.left));
+      const below=viewport.bottom-rect.bottom-pad-gap,above=rect.top-viewport.top-pad-gap;
       const top=below>=Math.min(height,240)||below>=above?rect.bottom+gap:Math.max(pad,rect.top-height-gap);
-      const next={left,top,right:'auto',bottom:'auto',maxHeight:`${Math.max(120,Math.min(height,top===rect.bottom+gap?below:above))}px`};
+      const boundedTop=Math.max(viewport.top+pad,Math.min(viewport.bottom-height-pad,top));
+      const next={left,top:boundedTop,right:'auto',bottom:'auto',maxHeight:`${Math.max(1,Math.min(height,top===rect.bottom+gap?below:above))}px`};
       setTableActionsStyle(current=>current.left===next.left&&current.top===next.top&&current.maxHeight===next.maxHeight?current:next);
     });};
     const viewport=window.visualViewport;place();window.addEventListener('resize',place);window.addEventListener('scroll',place,true);viewport?.addEventListener('resize',place);viewport?.addEventListener('scroll',place);

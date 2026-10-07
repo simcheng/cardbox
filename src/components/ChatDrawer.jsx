@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { visibleViewport } from '../utils/viewport.js';
 
 const QUICK_REACTIONS=['👍','❤️','😂','👏','🎉','🔥','😍','😮','👀','💯','🤔','🥳'];
 
@@ -8,10 +9,10 @@ export default function ChatDrawer({ open, room, playerId, text, setText, onSend
   const pickerAnchor=useRef(null),pickerRef=useRef(null);
   function placePicker(anchor=pickerAnchor.current) {
     if(!anchor)return;
-    const rect=anchor.getBoundingClientRect(),popup=pickerRef.current?.getBoundingClientRect(),width=Math.min(popup?.width||230,window.innerWidth-16),height=Math.min(popup?.height||(otherOpen?220:165),window.innerHeight-16);
-    const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
-    const opensUp=rect.bottom+height+10>window.innerHeight&&rect.top>height+10;
-    const top=Math.max(8,Math.min(window.innerHeight-height-8,opensUp?rect.top-height-8:rect.bottom+8));
+    const viewport=visibleViewport(),rect=anchor.getBoundingClientRect(),popup=pickerRef.current?.getBoundingClientRect(),width=Math.min(popup?.width||230,viewport.width-16),height=Math.min(popup?.height||(otherOpen?220:165),viewport.height-16);
+    const left=Math.max(viewport.left+8,Math.min(viewport.right-width-8,rect.right-width));
+    const opensUp=rect.bottom+height+10>viewport.bottom&&rect.top-viewport.top>height+10;
+    const top=Math.max(viewport.top+8,Math.min(viewport.bottom-height-8,opensUp?rect.top-height-8:rect.bottom+8));
     setPickerPosition({left,top,opensUp});
   }
   useEffect(()=>{
@@ -27,10 +28,10 @@ export default function ChatDrawer({ open, room, playerId, text, setText, onSend
   function togglePicker(messageId,event) {
     if(pickerFor===messageId){setPickerFor('');pickerAnchor.current=null;return;}
     pickerAnchor.current=event.currentTarget;setPickerFor(messageId);setOtherOpen(false);setCustomEmoji('');
-    const rect=event.currentTarget.getBoundingClientRect(),width=Math.min(230,window.innerWidth-16),height=165;
-    const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
-    const opensUp=rect.bottom+height+10>window.innerHeight&&rect.top>height+10;
-    setPickerPosition({left,top:Math.max(8,Math.min(window.innerHeight-height-8,opensUp?rect.top-height-8:rect.bottom+8)),opensUp});
+    const viewport=visibleViewport(),rect=event.currentTarget.getBoundingClientRect(),width=Math.min(230,viewport.width-16),height=165;
+    const left=Math.max(viewport.left+8,Math.min(viewport.right-width-8,rect.right-width));
+    const opensUp=rect.bottom+height+10>viewport.bottom&&rect.top-viewport.top>height+10;
+    setPickerPosition({left,top:Math.max(viewport.top+8,Math.min(viewport.bottom-height-8,opensUp?rect.top-height-8:rect.bottom+8)),opensUp});
   }
   function chooseReaction(messageId,emoji){onReact(messageId,emoji);setPickerFor('');setOtherOpen(false);}
   const picker=pickerFor&&pickerPosition?createPortal(<div ref={pickerRef} className={`reaction-picker ${pickerPosition.opensUp?'opens-up':'opens-down'} ${theme==='dark'?'theme-dark':''}`} role="menu" style={{position:'fixed',left:pickerPosition.left,right:'auto',top:pickerPosition.top,bottom:'auto',zIndex:1000}}>

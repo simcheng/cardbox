@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
+import { clampToViewport, visibleViewport } from '../utils/viewport.js';
 
 export default function TableContextMenu({ menu, room, playerId, canPlay = true, onAction, onClose }) {
   const menuRef=useRef(null),[position,setPosition]=useState({left:8,top:8});
@@ -11,11 +12,11 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
     if(!menu||!pile)return;
     const element=menuRef.current;if(!element)return;
     const place=()=>{
-      const rect=element.getBoundingClientRect(),gap=8,width=Math.min(rect.width,window.innerWidth-16),height=Math.min(rect.height,window.innerHeight-16);
+      const rect=element.getBoundingClientRect(),gap=8,viewport=visibleViewport(),width=Math.min(rect.width,viewport.width-16),height=Math.min(rect.height,viewport.height-16);
       const x=Number(menu.x)||8,y=Number(menu.y)||8;
-      const left=Math.max(gap,Math.min(window.innerWidth-width-gap,x+width+gap>window.innerWidth?x-width-gap:x));
-      const top=Math.max(gap,Math.min(window.innerHeight-height-gap,y+height+gap>window.innerHeight?y-height-gap:y));
-      setPosition({left,top,right:'auto',bottom:'auto',width:'min(224px, calc(100vw - 16px))',maxHeight:`${window.innerHeight-16}px`});
+      const desiredLeft=x+width+gap>viewport.right?x-width-gap:x,desiredTop=y+height+gap>viewport.bottom?y-height-gap:y;
+      const bounded=clampToViewport(desiredLeft,desiredTop,width,height,gap);
+      setPosition({left:bounded.left,top:bounded.top,right:'auto',bottom:'auto',width:'min(224px, calc(100vw - 16px))',maxHeight:`${viewport.height-16}px`});
     };
     place();
     const observer=new ResizeObserver(place),viewport=window.visualViewport;observer.observe(element);
