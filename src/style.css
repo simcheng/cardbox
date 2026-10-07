@@ -276,7 +276,10 @@
 .app-shell .drag-ghost .drag-count{z-index:2;}
 .app-shell .draw-flight{position:absolute;left:0;top:0;z-index:18;width:57px;height:80px;pointer-events:none;animation:draw-flight .42s cubic-bezier(.2,.75,.25,1) var(--draw-delay,0ms) both;}
 .app-shell .draw-flight>div{width:100%;height:100%;display:grid;place-items:center;border:1px solid #e1dfd5;border-radius:6px;background:#f5f1e7;color:#27634a;font-size:22px;box-shadow:0 8px 18px #061d1670;}
+.app-shell .move-flight{position:absolute;left:0;top:0;z-index:44;width:57px;height:80px;pointer-events:none;animation:move-flight .58s cubic-bezier(.2,.72,.25,1) var(--move-delay,0ms) both;}
+.app-shell .move-flight>div{width:100%;height:100%;display:grid;place-items:center;border:1px solid #e1dfd5;border-radius:6px;background:#f5f1e7;color:#27634a;font-size:22px;box-shadow:0 8px 18px #061d1670;}
 @keyframes draw-flight{0%{opacity:.95;transform:translate(var(--draw-x),var(--draw-y)) scale(.78) rotate(-9deg)}75%{opacity:1}100%{opacity:0;transform:translate(calc(var(--draw-x) + var(--draw-dx)),calc(var(--draw-y) + var(--draw-dy))) scale(.76) rotate(7deg)}}
+@keyframes move-flight{0%{opacity:.9;transform:translate(var(--move-x),var(--move-y)) scale(.72) rotate(-6deg)}65%{opacity:1}100%{opacity:0;transform:translate(calc(var(--move-x) + var(--move-dx)),calc(var(--move-y) + var(--move-dy))) scale(.72) rotate(5deg)}}
 @media(max-width:390px){.app-shell .table-title{display:flex;max-width:27vw;gap:6px}.app-shell .table-title>div{gap:4px}.app-shell .table-title b{max-width:15vw;font-size:10px}.app-shell .table-title small{font-size:8px}.app-shell .topbar{gap:10px;padding-inline:12px}.welcome .create-form,.welcome .join-form{gap:8px}.welcome .primary-button,.welcome .join-button{padding-inline:10px;font-size:11px}}
 @media(max-width:700px){
   .app-shell{overflow:hidden;}
@@ -923,6 +926,23 @@
 .app-shell .fan-insertion-card{transform:translate(-50%,-50%) scale(.58) rotate(var(--view-angle,0deg));}
 .app-shell .fan-insertion-count{transform:rotate(calc(0deg - var(--view-angle,0deg)));}
 .app-shell .drag-ghost .playing-card{transition:transform .12s ease-out,filter .12s ease-out;}
+.app-shell .playing-card.recent-touch{animation:recent-card-touch .95s ease-out both;}
+.app-shell .pile-zone.recent-touch .pile-cards{animation:recent-pile-touch .95s ease-out both;}
+.table-turn-indicator{position:absolute;z-index:18;top:14px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:6px 9px 6px 11px;border:1px solid #d7e2d5;border-radius:12px;background:#f8fbf6e8;color:#294535;box-shadow:0 8px 22px #061b1438;pointer-events:none;white-space:nowrap;}
+.table-turn-indicator>span:not(.turn-dot){display:grid;gap:1px;line-height:1.05;}
+.table-turn-indicator small{font-size:10px;color:#607469;}
+.table-turn-indicator.your-turn{border-color:#e5c968;box-shadow:0 0 0 2px #e5c96855,0 8px 22px #061b1438;}
+.turn-dot{width:8px;height:8px;border-radius:50%;background:#93a99a;box-shadow:0 0 0 3px #93a99a30;}
+.turn-indicator.your-turn .turn-dot{background:#d6ae3d;box-shadow:0 0 0 3px #d6ae3d35;}
+.settings-action{width:100%;min-height:40px;margin:8px 0 4px;padding:9px 12px;border:1px solid #ccd8cc;border-radius:9px;background:#f4f8f2;color:#294535;font-weight:700;cursor:pointer;}
+.settings-action:disabled{opacity:.55;cursor:default;}
+.settings-action:not(:disabled):hover{background:#e7f0e5;border-color:#a7bda9;}
+.app-shell[data-theme="dark"] .table-turn-indicator{border-color:#4c6655;background:#1c2c23f2;color:#e8f1e8;box-shadow:0 8px 22px #0008;}
+.app-shell[data-theme="dark"] .table-turn-indicator small{color:#aebeb0;}
+.app-shell[data-theme="dark"] .settings-action{border-color:#4c6655;background:#26382c;color:#e8f1e8;}
+.app-shell[data-theme="dark"] .settings-action:not(:disabled):hover{background:#304735;border-color:#6d8b72;}
+@keyframes recent-card-touch{0%{box-shadow:0 0 0 3px #f4d78366,0 6px 14px #061b1480}100%{box-shadow:0 0 0 0 transparent,0 4px 8px #061b1435}}
+@keyframes recent-pile-touch{0%{filter:drop-shadow(0 0 7px #f4d78388)}100%{filter:none}}
 .role-kick{border-color:#d8aaa4!important;color:#a24f49!important;background:#fff8f6!important;}
 .role-kick:hover{background:#f8e7e3!important;border-color:#c78379!important;}
 .app-shell .layout-fan .pile-cards .playing-card,.app-shell .layout-fan-stack .pile-cards .playing-card{cursor:grab;touch-action:none;}
@@ -954,4 +974,7 @@
   .app-shell .toolbar .deck-status small{display:none;}
   .app-shell .table-hand-zone .hand-tools{column-gap:3px;row-gap:3px;}
   .app-shell .table-hand-zone .hand-tools button{padding-inline:5px;font-size:8px;}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important;}
 }

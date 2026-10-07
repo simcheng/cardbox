@@ -51,7 +51,7 @@ export function applyTableAction(room, playerId, payload = {}) {
   const isCohost = room.cohostIds.has(playerId);
   const isModerator = isHost || isCohost;
   const mayMoveCards = !room.settings.hostControls || isModerator;
-  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile', 'host:assign', 'player:kick'].includes(type) && !mayMoveCards) return reject('Only the host or a cohost can move cards at this table.');
+  if (!['chat', 'chat:react', 'settings', 'sort-hand', 'hand:reorder', 'hand:reorder-cards', 'profile', 'host:assign', 'player:kick', 'turn:start', 'turn:next', 'turn:stop'].includes(type) && !mayMoveCards) return reject('Only the host or a cohost can move cards at this table.');
 
   if (type === 'undo') {
     const previous = room.undoStack?.pop();
@@ -61,7 +61,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     return { ok: true };
   }
   if (type === 'reset-board' && !isModerator) return reject('Only the host or a cohost can reset the board.');
-  const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign', 'player:kick'].includes(type) ? null : { piles: structuredClone(room.piles) };
+  const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign', 'player:kick', 'turn:start', 'turn:next', 'turn:stop'].includes(type) ? null : { piles: structuredClone(room.piles) };
 
   if (type === 'shuffle') {
     const pile = findPile(room, 'deck'); if (!pile) return reject();
@@ -322,6 +322,17 @@ export function applyTableAction(room, playerId, payload = {}) {
     const index = room.piles.filter((pile) => pile.kind === 'shared').length;
     const pileType=payload.pileType==='discard'?'discard':'cards';
     room.piles.push({ id: `pile-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name: (payload.name || (pileType==='discard'?`Discard ${index}`:`Pile ${index}`)).slice(0,24), kind: 'shared', pileType, x: 30 + (index % 5) * 10, y: 47 + (index % 2) * 12, cards: [] });
+  } else if (type === 'discard:to-deck' || type === 'discard:to-hand') {
+    const discard=findPile(room,payload.pileId||'discard');
+    if(!isDiscardPile(discard)||!discard.cards.length)return reject('The discard pile is empty.');
+    const cards=discard.cards.splice(0);
+    if(type==='discard:to-deck'){
+      const deck=findPile(room,'deck');if(!deck)return reject('The deck is unavailable.');
+      for(const card of cards){card.ownerId=null;card.faceUp=false;} deck.cards.push(...cards);deck.cards=shuffle(deck.cards);
+    }else{
+      const hand=ensureHand(room,playerId);
+      for(const card of cards){card.ownerId=playerId;card.faceUp=true;} hand.cards.push(...cards);
+    }
   } else if (type === 'pile:absorb-to-discard') {
     const requested=payload.pileId?findPile(room,payload.pileId):null;if(payload.pileId&&!isDiscardPile(requested))return reject('Choose a discard pile.');
     const discard=requested||findPile(room,'discard');if(!discard)return reject('The discard pile is unavailable.');
@@ -339,13 +350,29 @@ export function applyTableAction(room, playerId, payload = {}) {
     const pile = findPile(room, payload.pileId);
     if (!pile || pile.kind === 'hand' || !Number.isFinite(Number(payload.x)) || !Number.isFinite(Number(payload.y))) return reject('Choose a movable pile and a table position.');
     pile.x = Math.min(94, Math.max(6, Number(payload.x))); pile.y = Math.min(78, Math.max(18, Number(payload.y)));
+  } else if (type === 'turn:start' || type === 'turn:stop' || type === 'turn:next') {
+    room.turn ||= {enabled:false,currentPlayerId:null};
+    if(type==='turn:start'||type==='turn:stop'){if(!isModerator)return reject('Only the host or a cohost can change turn order.');}
+    if(type==='turn:stop'){room.turn={enabled:false,currentPlayerId:null};}
+    else {
+      const players=[...room.players.values()].filter(player=>player.online);
+      if(!players.length)return reject('There are no online players for turn order.');
+      if(type==='turn:start'){const seconds=Math.max(0,Math.min(3600,Number(payload.timerSeconds)||0));room.turn={enabled:true,currentPlayerId:room.turn.enabled&&players.some(player=>player.id===room.turn.currentPlayerId)?room.turn.currentPlayerId:players[0].id,timerSeconds:seconds,deadlineAt:seconds?Date.now()+seconds*1000:null};}
+      else {
+        if(!room.turn.enabled)return reject('Turn order is not active.');
+        if(room.turn.currentPlayerId!==playerId&&!isModerator)return reject('Only the current player can advance the turn.');
+        const index=Math.max(0,players.findIndex(player=>player.id===room.turn.currentPlayerId));
+        room.turn.currentPlayerId=players[(index+1)%players.length].id;
+        room.turn.deadlineAt=room.turn.timerSeconds?Date.now()+room.turn.timerSeconds*1000:null;
+      }
+    }
   } else if (type === 'player:kick') {
     if (!isModerator) return reject('Only the host or a cohost can kick players.');
     const target=room.players.get(payload.targetId);
     if (!target || target.id===room.hostId || target.id===playerId) return reject('Choose a non-host player to kick.');
     const hand=room.piles.find(pile=>pile.kind==='hand'&&pile.ownerId===target.id),discard=findPile(room,'discard');
     if(hand&&discard){for(const card of hand.cards){card.ownerId=null;card.faceUp=true;}discard.cards.push(...hand.cards);room.piles.splice(room.piles.indexOf(hand),1);}
-    room.cohostIds.delete(target.id);room.players.delete(target.id);return {ok:true,kickedPlayerId:target.id};
+    room.cohostIds.delete(target.id);room.players.delete(target.id);if(room.turn?.currentPlayerId===target.id)room.turn.currentPlayerId=[...room.players.values()].find(player=>player.online)?.id||null;return {ok:true,kickedPlayerId:target.id};
   } else if (type === 'host:assign') {
     if (!isHost) return reject('Only the primary host can assign host roles.');
     const target=room.players.get(payload.targetId);

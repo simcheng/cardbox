@@ -25,6 +25,7 @@ function App() {
   const [roomName, setRoomName] = useState('Friday night cards');
   const [deckId, setDeckId] = useState('standard-52');
   const [roomCode, setRoomCode] = useState(initialRoom || '');
+  const [inviteJoin, setInviteJoin] = useState(!!initialRoom);
   const [error, setError] = useState(''), [selected, setSelected] = useState([]), [selectedPileIds,setSelectedPileIds]=useState([]), [selectionBox, setSelectionBox] = useState(null);
   const [menu, setMenu] = useState(''), [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -39,6 +40,7 @@ function App() {
   const activeRoomIdRef=useRef(initialRoom||'');
   const [tableActionsStyle,setTableActionsStyle]=useState({});
   const cardMoveFrame = useRef(null), pileMoveFrame = useRef(null), dragCleanupTimer=useRef(null), dragGhostRef=useRef(null),dragLatestPositionRef=useRef(null);
+  const audioContextRef=useRef(null);
   const viewerRef = useRef(playerId), chatOpenRef = useRef(mobilePanel);
   viewerRef.current=playerId; chatOpenRef.current=mobilePanel;
   const self = room?.players.find((p) => p.id === playerId);
@@ -100,9 +102,7 @@ function App() {
       const savedPlayerId=sessionStorage.getItem(playerKey(roomId)),savedPlayerToken=sessionStorage.getItem(playerTokenKey(roomId));
       if(!savedPlayerId||!savedPlayerToken||joinInFlightRef.current)return;
       joinInFlightRef.current=true;
-      socket.emit('room:join', { roomId, playerName: name.trim(), playerId:savedPlayerId, playerToken:savedPlayerToken }, (r) => {
-        joinInFlightRef.current=false;if (r.ok) applyRoom(r); else setError(r.error);
-      });
+      socket.emit('room:join', { roomId, playerName: name.trim(), playerId:savedPlayerId, playerToken:savedPlayerToken }, handleJoinResult);
     };
     socket.on('connect', join);
     const onDisconnect=()=>{joinInFlightRef.current=false;};
@@ -149,6 +149,8 @@ function App() {
     sessionStorage.setItem('cardtable:name', name.trim());
     history.replaceState({}, '', `${location.pathname}?room=${r.roomId}`); setError('');
   }
+  function returnToStart() { activeRoomIdRef.current=''; history.replaceState({}, '', location.pathname); setRoom(null); setPlayerId(''); setInviteJoin(false); setRoomCode(''); setError(''); }
+  function handleJoinResult(r) { joinInFlightRef.current=false; if(r?.ok) return applyRoom(r); if(/closed|does not exist/i.test(r?.error||'')) return returnToStart(); setError(r?.error||'Unable to join that table.'); }
   function create() {
     if (!name.trim()) return setError('Add a name to join the table.');
     socket.emit('room:create', { name: roomName, playerName: name.trim(), settings: { privateHands: true, hostControls: false, deckId } }, applyRoom);
@@ -160,9 +162,19 @@ function App() {
     let requestedId=sessionStorage.getItem(playerKey(normalizedRoom)),requestedToken=sessionStorage.getItem(playerTokenKey(normalizedRoom));
     if(!requestedId||!requestedToken){requestedId=crypto.randomUUID();requestedToken=crypto.randomUUID();sessionStorage.setItem(playerKey(normalizedRoom),requestedId);sessionStorage.setItem(playerTokenKey(normalizedRoom),requestedToken);}
     joinInFlightRef.current=true;
-    socket.emit('room:join', { roomId: normalizedRoom, playerName: name.trim(), playerId: requestedId, playerToken:requestedToken }, (r) => {joinInFlightRef.current=false;r.ok?applyRoom(r):setError(r.error)});
+    socket.emit('room:join', { roomId: normalizedRoom, playerName: name.trim(), playerId: requestedId, playerToken:requestedToken }, handleJoinResult);
+  }
+  function playSound(kind) {
+    try {
+      const AudioContext=window.AudioContext||window.webkitAudioContext;if(!AudioContext)return;
+      const context=audioContextRef.current||(audioContextRef.current=new AudioContext());if(context.state==='suspended')context.resume();
+      const now=context.currentTime,osc=context.createOscillator(),gain=context.createGain();
+      const tones={move:[220,.07,'sine'],draw:[330,.12,'triangle'],deal:[390,.1,'triangle'],shuffle:[150,.22,'sawtooth'],flip:[270,.08,'sine'],turn:[520,.16,'sine']};const [frequency,duration,wave]=tones[kind]||tones.move;
+      osc.type=wave;osc.frequency.setValueAtTime(frequency,now);osc.frequency.exponentialRampToValueAtTime(frequency*(kind==='shuffle'?.55:1.35),now+duration);gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.045,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);osc.connect(gain).connect(context.destination);osc.start(now);osc.stop(now+duration+.02);
+    } catch {}
   }
   const action = (type, extra = {}, onComplete) => {
+    const soundType=type==='shuffle'?'shuffle':['draw'].includes(type)?'draw':['deal'].includes(type)?'deal':['flip','flip-top','flip-cards','selection:flip'].includes(type)?'flip':['turn:start','turn:next'].includes(type)?'turn':['move','move-card','move-cards','move-stack','selection:move','place','place-cards','return-card','return-stack','discard:to-deck','discard:to-hand','pile:absorb-to-discard'].includes(type)?'move':null;if(soundType)playSound(soundType);
     let settled=false;
     const finish=(r)=>{if(settled)return;settled=true;if (!r?.ok && r?.error) setToast(r.error);onComplete?.(r);};
     const timer=onComplete?setTimeout(()=>finish(null),2500):null;
@@ -551,14 +563,14 @@ function App() {
       <a className="brand" href="#"><span className="brand-mark">♧</span> cardtable</a>
       <div className="welcome-actions"><span className="live-note"><i/> A table for everyone</span></div>
     </header>
-    <section className={`welcome-card ${initialRoom?'invite-join-card':''}`}>
+    <section className={`welcome-card ${inviteJoin?'invite-join-card':''}`}>
       <div className="eyebrow"><span>✦</span> YOUR GAME, YOUR RULES</div>
-      <h1>{initialRoom?<>You’re invited<br/>to the table.</>:<>Make room<br/>for <em>one more.</em></>}</h1>
-      <p className="intro">{initialRoom?'Enter your guest name to join the existing lobby.':'A relaxed place to play cards together. No scorekeeping required.'}</p>
-      <label className="welcome-field" htmlFor="guest"><span>Your name</span><input id="guest" value={name} onChange={(e)=>setName(e.target.value)} placeholder="What should we call you?" maxLength={24} onKeyDown={(e)=>e.key==='Enter'&&(initialRoom?join():create())}/></label>
+      <h1>{inviteJoin?<>You’re invited<br/>to the table.</>:<>Make room<br/>for <em>one more.</em></>}</h1>
+      <p className="intro">{inviteJoin?'Enter your guest name to join the existing lobby.':'A relaxed place to play cards together. No scorekeeping required.'}</p>
+      <label className="welcome-field" htmlFor="guest"><span>Your name</span><input id="guest" value={name} onChange={(e)=>setName(e.target.value)} placeholder="What should we call you?" maxLength={24} onKeyDown={(e)=>e.key==='Enter'&&(inviteJoin?join():create())}/></label>
       {error&&<div className="error-note" role="alert">{error}</div>}
-      {initialRoom&&<section className="welcome-action-section invite-join-section" aria-labelledby="join-heading"><h2 id="join-heading">Join existing lobby</h2><div className="welcome-join-row"><label className="welcome-field"><span>Invite code</span><input value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e)=>e.key==='Enter'&&join()} aria-label="Invite code"/></label><button className="join-button" onClick={join}>Join lobby <span>↗</span></button></div></section>}
-      {!initialRoom&&<>
+      {inviteJoin&&<section className="welcome-action-section invite-join-section" aria-labelledby="join-heading"><h2 id="join-heading">Join existing lobby</h2><div className="welcome-join-row"><label className="welcome-field"><span>Invite code</span><input value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e)=>e.key==='Enter'&&join()} aria-label="Invite code"/></label><button className="join-button" onClick={join}>Join lobby <span>↗</span></button></div></section>}
+      {!inviteJoin&&<>
       <section className="welcome-action-section" aria-labelledby="create-heading">
         <h2 id="create-heading">Create a table</h2>
         <div className="welcome-options">
@@ -588,7 +600,7 @@ function App() {
       <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isModerator} selectedCount={selected.length} canAbsorb={room.piles.some(item=>item.kind!=='deck'&&item.kind!=='hand'&&item.id!=='discard'&&item.pileType!=='discard'&&item.cards.length>0)} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
     </section></div>
     <ChatDrawer open={mobilePanel} room={room} playerId={playerId} text={chatText} setText={setChatText} onSend={sendChat} onReact={(messageId,emoji)=>action('chat:react',{messageId,emoji})} onClose={()=>setMobilePanel(false)} onInvite={copyInvite} chatEnd={chatEnd} theme={theme}/>
-    <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} onKick={(targetId)=>action('player:kick',{targetId})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
+    <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} onKick={(targetId)=>action('player:kick',{targetId})} turn={room.turn} onTurn={(mode,timerSeconds)=>action(mode==='start'?'turn:start':mode==='stop'?'turn:stop':'turn:next',mode==='start'?{timerSeconds}: {})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
     <InviteDialog open={inviteOpen} room={room} onClose={()=>setInviteOpen(false)} onToast={setToast}/>
     <TableContextMenu menu={contextMenu} room={room} playerId={playerId} canPlay={canPlay} onAction={action} onClose={()=>setContextMenu(null)}/>
     <LedgerDialog open={ledgerOpen} entries={room.ledger||[]} onClose={()=>setLedgerOpen(false)}/>

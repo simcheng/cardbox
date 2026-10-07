@@ -21,8 +21,9 @@ function uniqueName(room, requested, excludeId = '') {
 
 function publicRoom(room, viewerId) {
   const settings = room.settings;
+  const turn={...room.turn, currentPlayerName:room.turn?.currentPlayerId?room.players.get(room.turn.currentPlayerId)?.name||null:null};
   return {
-    id: room.id, name: room.name, hostId: room.hostId, settings, canUndo: room.undoStack?.length > 0,
+    id: room.id, name: room.name, hostId: room.hostId, settings, turn: turn.enabled?turn:{enabled:false,currentPlayerId:null,currentPlayerName:null}, canUndo: room.undoStack?.length > 0,
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, emoji: p.emoji || '', online: p.online,
       role:p.id===room.hostId?'host':room.cohostIds?.has(p.id)?'cohost':'player',
@@ -60,7 +61,7 @@ export function createRoom(name, playerName, settings = {}) {
     piles: [
       { id: 'deck', name: deckDefinition.name, kind: 'deck', x: 50, y: 47, cards: shuffle(createDeck(deckDefinition)) },
       { id: 'discard', name: 'Discard', kind: 'shared', x: 66, y: 47, cards: [] },
-    ], chat: [], ledger: [], undoStack: [], updatedAt: Date.now(), timer: null,
+    ], chat: [], ledger: [], undoStack: [], turn:{enabled:false,currentPlayerId:null}, updatedAt: Date.now(), timer: null,
   };
   rooms.set(id, room);
   return { room, player, playerToken: player.sessionToken };

@@ -57,6 +57,7 @@ export default function TableContextMenu({ menu, room, playerId, canPlay = true,
         <button role="menuitem" onClick={()=>run('return-stack',{toId:'discard'})}>Discard whole stack</button>
       </>}
       {canPlay&&pile.kind==='shared'&&<>
+        {(pile.id==='discard'||pile.pileType==='discard')&&pile.cards.length>0&&<><button role="menuitem" onClick={()=>run('discard:to-deck')}>Return all to deck</button><button role="menuitem" onClick={()=>run('discard:to-hand')}>Take all into my hand</button></>}
         {(pile.id==='discard'||pile.pileType==='discard')&&room.piles.some(item=>item.kind!=='deck'&&item.kind!=='hand'&&item.id!=='discard'&&item.pileType!=='discard'&&item.cards.length>0)&&<button role="menuitem" onClick={()=>run('pile:absorb-to-discard')}>Absorb table cards into discard</button>}
         {renaming?<form className="pile-rename-form" onSubmit={(event)=>{event.preventDefault();const next=name.trim().slice(0,24);if(next)run('pile:rename',{name:next});}}><label htmlFor="pile-rename-input">Pile name</label><input id="pile-rename-input" autoFocus maxLength={24} value={name} onChange={(event)=>setName(event.target.value)}/><div><button type="submit" disabled={!name.trim()}>Save name</button><button type="button" onClick={()=>setRenaming(false)}>Cancel</button></div></form>:<button role="menuitem" onClick={()=>setRenaming(true)}>Rename pile</button>}
       </>}
