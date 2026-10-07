@@ -82,7 +82,8 @@ export function joinRoom(room, playerName, requestedId, requestedToken) {
       }
       if (room.players.size >= MAX_ROOM_IDENTITIES) return null;
     }
-    player = { id: randomUUID(), sessionToken: randomUUID(), name: uniqueName(room, playerName), color: colors[room.players.size % colors.length], emoji: animals[room.players.size % animals.length], online: true };
+    const isFreshIdentity=!candidate&&typeof requestedId==='string'&&typeof requestedToken==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedId)&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedToken);
+    player = { id: isFreshIdentity?requestedId:randomUUID(), sessionToken:isFreshIdentity?requestedToken:randomUUID(), name: uniqueName(room, playerName), color: colors[room.players.size % colors.length], emoji: animals[room.players.size % animals.length], online: true };
     room.players.set(player.id, player);
   } else if(!player.online&&[...room.players.values()].filter(item=>item.online).length>=MAX_ROOM_PLAYERS) {
     return null;

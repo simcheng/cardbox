@@ -886,3 +886,69 @@
 .app-shell .fan-insertion-card.is-group::before,.app-shell .fan-insertion-card.is-group::after{content:'';position:absolute;z-index:-1;inset:4px -4px -4px 4px;border-radius:7px;background:#eceade;border:1px solid #99aa98;}
 .app-shell .fan-insertion-card.is-group::after{inset:8px -8px -8px 8px;}
 .app-shell .fan-insertion-count{position:absolute;right:-15px;top:-13px;display:grid;place-items:center;min-width:24px;height:24px;padding:0 5px;border-radius:99px;background:#194530;color:#fff;border:2px solid #f4d783;font-size:9px;font-weight:800;white-space:nowrap;box-shadow:0 2px 7px #071a1299;}
+
+/* Compact, viewport-aware deck controls and hand collapse tab. */
+.app-shell .action-dock .toolbar{position:absolute;z-index:15;top:72px;right:18px;bottom:auto;left:auto;width:auto;max-width:calc(100vw - 24px);min-height:50px;justify-content:flex-start;gap:10px;padding:7px 9px;border:1px solid #ffffff24;border-radius:13px;background:#08281edb;box-shadow:0 8px 25px #031b1470;transform:translate(var(--toolbar-drag-x,0px),var(--toolbar-drag-y,0px));}
+.app-shell .toolbar .deck-status{display:flex;align-items:center;gap:8px;flex:none;min-width:68px;padding:0 3px;}
+.app-shell .toolbar .tool-dropdown{flex:none;}
+.app-shell .toolbar .deck-menu-toggle{display:grid;place-items:center;width:38px;height:38px;min-height:38px;padding:0;border:1px solid #ffffff26;border-radius:9px;background:#ffffff12;color:#edf3e9;font-size:17px;letter-spacing:2px;line-height:1;}
+.app-shell .toolbar .deck-menu-toggle:hover,.app-shell .toolbar .deck-menu-toggle[aria-expanded="true"]{background:#ffffff25;color:#f1dc95;}
+.app-shell .toolbar .deck-menu-toggle:focus-visible{outline:2px solid #e7d58f;outline-offset:2px;}
+.app-shell .toolbar .extra-menu{position:fixed;z-index:60;width:min(292px,calc(100vw - 16px));min-width:min(230px,calc(100vw - 16px));max-width:calc(100vw - 16px);max-height:min(var(--menu-max-height,72dvh),72dvh,560px);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;padding:10px;border:1px solid #dfe7dc;border-radius:13px;background:#fbfcf8;color:#334a3b;box-shadow:0 16px 42px #061b1485;}
+.app-shell .toolbar .extra-menu button{min-height:40px;padding:10px 11px;line-height:1.25;}
+.app-shell[data-theme="dark"] .toolbar .extra-menu{border-color:#435447;background:#19271f;color:#e4eee5;}
+.app-shell[data-theme="dark"] .toolbar .extra-menu button{color:#e0eae1;}
+.app-shell[data-theme="dark"] .toolbar .extra-menu button:hover{background:#29392e;}
+.app-shell .table-hand-zone .hand-zone-header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding-inline:10px;}
+.app-shell .table-hand-zone .table-hand-label{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;}
+.app-shell .table-hand-label>span{display:inline-flex;align-items:center;gap:9px;min-width:0;}
+.app-shell .table-hand-label>span>b{flex:none;}
+.app-shell .table-hand-label .hand-visibility-toggle{position:static;transform:none;width:30px;height:30px;min-height:30px;flex:none;border:0;border-left:1px solid #ffffff2b;border-radius:0 8px 8px 0;background:#ffffff0d;color:#f6f2db;font-size:15px;box-shadow:none;}
+.app-shell .table-hand-label .hand-visibility-toggle:hover{background:#ffffff1e;}
+.app-shell .table-hand-zone .hand-tools{grid-column:2;grid-row:1;display:flex;justify-self:end;align-items:center;min-width:0;}
+.app-shell .layout-fan .pile-cards .playing-card:hover,.app-shell .layout-fan-stack .pile-cards .playing-card:hover{filter:drop-shadow(0 5px 6px #031b1466);}
+.app-shell .layout-fan .pile-cards .playing-card.selected-card,.app-shell .layout-fan-stack .pile-cards .playing-card.selected-card{filter:drop-shadow(0 6px 7px #031b1477);}
+.app-shell .pile-zone .pile-menu-button,.app-shell .pile-zone .pile-grab{top:-25px;z-index:12;width:24px;height:24px;min-width:24px;min-height:24px;padding:0;display:grid;place-items:center;line-height:1;}
+.app-shell .pile-zone .pile-menu-button{left:calc(50% - 33px);right:auto;}
+.app-shell .pile-zone .pile-grab{left:calc(50% + 9px);right:auto;}
+.app-shell .pile-zone.layout-fan .pile-menu-button,.app-shell .pile-zone.layout-fan-stack .pile-menu-button{top:-25px;left:calc(50% - var(--fan-width,74px)/2);right:auto;}
+.app-shell .pile-zone.layout-fan .pile-grab,.app-shell .pile-zone.layout-fan-stack .pile-grab{top:-25px;left:auto;right:calc(50% - var(--fan-width,74px)/2);}
+.app-shell .pile-zone.layout-fan .stack-count,.app-shell .pile-zone.layout-fan-stack .stack-count{top:8px!important;right:calc(50% - var(--fan-width,74px)/2)!important;}
+.app-shell .pile-zone.layout-fan .pile-menu-button,.app-shell .pile-zone.layout-fan-stack .pile-menu-button{top:var(--fan-control-top)!important;left:var(--fan-control-left)!important;right:auto!important;}
+.app-shell .pile-zone.layout-fan .pile-grab,.app-shell .pile-zone.layout-fan-stack .pile-grab{top:var(--fan-control-top)!important;left:var(--fan-control-right)!important;right:auto!important;}
+.app-shell .pile-zone.layout-fan .stack-count,.app-shell .pile-zone.layout-fan-stack .stack-count{top:var(--fan-count-top)!important;left:calc(var(--fan-control-right) + 10px)!important;right:auto!important;bottom:auto!important;transform:none!important;}
+.app-shell .drag-ghost>span{display:none;}
+.app-shell .fan-insertion-marker.is-horizontal{width:94px;height:3px;}
+.app-shell .fan-insertion-card{transform:translate(-50%,-50%) scale(.58) rotate(var(--view-angle,0deg));}
+.app-shell .fan-insertion-count{transform:rotate(calc(0deg - var(--view-angle,0deg)));}
+.app-shell .drag-ghost .playing-card{transition:transform .12s ease-out,filter .12s ease-out;}
+.app-shell .layout-fan .pile-cards .playing-card,.app-shell .layout-fan-stack .pile-cards .playing-card{cursor:grab;touch-action:none;}
+.app-shell .layout-fan .pile-cards .playing-card:active,.app-shell .layout-fan-stack .pile-cards .playing-card:active{cursor:grabbing;}
+.welcome-card.invite-join-card .invite-join-section{margin-top:23px;padding-top:17px;border-top:1px solid #e8ebe3;}
+.welcome-card.invite-join-card .invite-join-section h2{margin:0 0 12px;}
+.welcome-card.invite-join-card .welcome-join-row{grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;}
+.welcome-card.invite-join-card .join-button{min-height:46px;padding-inline:18px;white-space:nowrap;}
+.welcome[data-theme="dark"] .invite-join-section{border-color:#3b493f;}
+@media(max-width:700px){
+  .app-shell .action-dock .toolbar{top:8px;right:8px;bottom:auto;left:auto;width:auto;max-width:calc(100vw - 16px);min-height:44px;padding:5px 7px;gap:7px;transform:translate(var(--toolbar-drag-x,0px),var(--toolbar-drag-y,0px));}
+  .app-shell .toolbar .deck-status{display:flex;min-width:58px;gap:6px;}
+  .app-shell .toolbar .mini-deck{width:19px;height:26px;}
+  .app-shell .toolbar .deck-status small{font-size:8px;}
+  .app-shell .toolbar .deck-menu-toggle{width:34px;height:34px;min-height:34px;}
+  .app-shell .toolbar .extra-menu{width:min(292px,calc(100vw - 16px));min-width:min(230px,calc(100vw - 16px));}
+  .app-shell .table-hand-zone .hand-zone-header{grid-template-columns:minmax(0,1fr);gap:4px;padding-inline:5px;}
+  .app-shell .table-hand-zone .table-hand-label{grid-column:1;grid-row:1;justify-content:flex-start;}
+  .app-shell .table-hand-zone .hand-tools{grid-column:1;grid-row:2;justify-self:center;max-width:100%;flex-wrap:wrap;justify-content:center;}
+  .app-shell .table-hand-zone .hand-tools .hand-draw{min-width:112px;}
+  .app-shell .table-hand-label .hand-visibility-toggle{width:28px;height:28px;min-height:28px;}
+  .app-shell .pile-zone .pile-menu-button,.app-shell .pile-zone .pile-grab{top:-23px;width:22px;height:22px;min-width:22px;min-height:22px;}
+  .app-shell .pile-zone.layout-fan .pile-menu-button,.app-shell .pile-zone.layout-fan-stack .pile-menu-button,.app-shell .pile-zone.layout-fan .pile-grab,.app-shell .pile-zone.layout-fan-stack .pile-grab{width:22px;height:22px;min-width:22px;min-height:22px;}
+  .welcome-card.invite-join-card .welcome-join-row{grid-template-columns:minmax(0,1fr);}
+  .welcome-card.invite-join-card .join-button{width:100%;}
+}
+@media(max-width:370px){
+  .app-shell .toolbar .deck-status{min-width:49px;}
+  .app-shell .toolbar .deck-status small{display:none;}
+  .app-shell .table-hand-zone .hand-tools{column-gap:3px;row-gap:3px;}
+  .app-shell .table-hand-zone .hand-tools button{padding-inline:5px;font-size:8px;}
+}

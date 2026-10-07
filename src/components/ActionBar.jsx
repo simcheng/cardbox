@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selectedCount, onAction, onFlipSelected, onLedger, onMoveSelection, onClearSelection }) {
-  const [open, setOpen] = useState(false), [deckOpen, setDeckOpen] = useState(true), [dealCount, setDealCount] = useState(1), [dealEachCount,setDealEachCount]=useState(1), [menuPosition,setMenuPosition]=useState({}), [opensUp, setOpensUp] = useState(true), [opensLeft,setOpensLeft]=useState(true), [menuMaxHeight,setMenuMaxHeight]=useState(360), [confirmReset, setConfirmReset] = useState(false), [offset, setOffset] = useState({x:0,y:0}), [dragging, setDragging] = useState(false);
+export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selectedCount, canAbsorb = false, onAction, onFlipSelected, onLedger, onMoveSelection, onClearSelection }) {
+  const [open, setOpen] = useState(false), [dealCount, setDealCount] = useState(1), [dealEachCount,setDealEachCount]=useState(1), [menuPosition,setMenuPosition]=useState({}), [opensUp, setOpensUp] = useState(true), [opensLeft,setOpensLeft]=useState(true), [menuMaxHeight,setMenuMaxHeight]=useState(360), [confirmReset, setConfirmReset] = useState(false), [offset, setOffset] = useState({x:0,y:0}), [dragging, setDragging] = useState(false);
   const toolbarRef=useRef(null),dragRef=useRef(null),moreRef=useRef(null),menuRef=useRef(null),undoRef=useRef(null);
   const toggleMore = (event) => {
     positionMenu(event.currentTarget);
@@ -28,7 +29,7 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     reposition();window.addEventListener('resize',reposition);window.addEventListener('scroll',reposition,true);
     const observer=menuRef.current?new ResizeObserver(reposition):null;if(observer&&menuRef.current)observer.observe(menuRef.current);
     return()=>{cancelAnimationFrame(frame);observer?.disconnect();window.removeEventListener('resize',reposition);window.removeEventListener('scroll',reposition,true);};
-  },[open,offset,deckOpen,confirmReset,selectedCount]);
+  },[open,offset,confirmReset,selectedCount]);
   useEffect(()=>{
     const resize=()=>{
       const rect=toolbarRef.current?.getBoundingClientRect();if(!rect)return;
@@ -66,18 +67,18 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
     <div ref={toolbarRef} className={`toolbar ${dragging?'is-dragging':''}`} style={offsetStyle}>
       <button className="toolbar-drag-handle" aria-label="Move deck controls" title="Drag to move deck controls" onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} onPointerCancel={onGripUp}>⠿</button>
       <div className="deck-status"><span className="mini-deck">♧</span><div><b>{deckCount}</b><small>in deck</small></div></div>
-      {canPlay&&<button className="deck-menu-toggle" aria-expanded={deckOpen} onClick={()=>setDeckOpen(!deckOpen)}><span>Deck actions</span><i className={`deck-chevron ${deckOpen?'is-open':''}`} aria-hidden="true"/></button>}
-      {canPlay&&deckOpen&&<div className="toolbar-actions">
-        <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('shuffle',{pileId:'deck'})}><span>⟳</span><label>Shuffle</label></button>
-        <button className="tool-secondary" disabled={!deckCount} onClick={()=>onAction('deal',{count:1})}><span>♧</span><label>Deal one</label></button>
-        <div className="tool-dropdown">
-          <button ref={moreRef} className="tool-more" aria-expanded={open} aria-label="More card actions" onClick={toggleMore}>•••</button>
-          {open&&<div ref={menuRef} style={{...menuPosition,'--menu-max-height':`${menuMaxHeight}px`}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'} ${opensLeft?'opens-left':'opens-right'}`}>
-            <b>More card actions</b>
+      {canPlay&&<div className="tool-dropdown deck-actions-dropdown">
+          <button ref={moreRef} className="deck-menu-toggle" aria-expanded={open} aria-label="Deck actions" title="Deck actions" onClick={toggleMore}>•••</button>
+          {open&&createPortal(<div ref={menuRef} style={{...menuPosition,'--menu-max-height':`${menuMaxHeight}px`}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'} ${opensLeft?'opens-left':'opens-right'}`}>
+            <b>Deck actions</b>
             {canPlay&&<>
+              <button disabled={!deckCount} onClick={()=>{onAction('shuffle',{pileId:'deck'});setOpen(false)}}>↻ Shuffle deck</button>
+              <button disabled={!deckCount} onClick={()=>{onAction('deal',{count:1});setOpen(false)}}>Draw one card</button>
               <div className="deal-all-row"><label>Cards to me<input aria-label="Cards to deal to me" type="number" min="1" max="13" value={dealCount} onChange={(e)=>setDealCount(Math.max(1,Math.min(13,Number(e.target.value)||1)))}/></label><button onClick={()=>{onAction('deal',{count:dealCount});setOpen(false)}}>Deal to me</button></div>
               <div className="deal-all-row"><label>Cards each<input type="number" min="1" max="13" value={dealEachCount} onChange={(e)=>setDealEachCount(Math.max(1,Math.min(13,Number(e.target.value)||1)))}/></label><button onClick={()=>{onAction('deal',{count:dealEachCount,toAll:true});setOpen(false)}}>Deal to everyone</button></div>
-              <button onClick={()=>{onAction('pile:create');setOpen(false)}}>Create a shared pile</button>
+              <button onClick={()=>{onAction('pile:create',{name:'New pile'});setOpen(false)}}>＋ Create a card pile</button>
+              <button onClick={()=>{onAction('pile:create',{name:'New discard pile',pileType:'discard'});setOpen(false)}}>＋ Create a discard pile</button>
+              {canAbsorb&&<button onClick={()=>{onAction('pile:absorb-to-discard');setOpen(false)}}>Absorb table cards into discard</button>}
             </>}
             {canPlay&&selectedCount>0&&<>
               <div className="selection-menu-label">{selectedCount} selected</div>
@@ -91,9 +92,8 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
               ?<div className="reset-confirm"><span>Return all cards to a fresh deck?</span><button onClick={()=>{onAction('reset-board');setConfirmReset(false);setOpen(false)}}>Reset board</button><button onClick={()=>setConfirmReset(false)}>Cancel</button></div>
               :<button onClick={()=>setConfirmReset(true)}>↻ Reset board…</button>}
             </>}
-          </div>}
-        </div>
-      </div>}
+          </div>,document.body)}
+        </div>}
     </div>
     {canPlay&&<button ref={undoRef} className="tool-undo" disabled={!canUndo} onClick={()=>onAction('undo')} aria-label="Undo last table action">↶ <span>Undo</span></button>}
   </div>;

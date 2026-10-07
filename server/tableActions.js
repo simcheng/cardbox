@@ -1,11 +1,12 @@
 import { createDeck, getDeck, shuffle } from './deck.js';
 import { sortCards } from '../shared/cardOrder.js';
 const findPile = (room, id) => room.piles.find((pile) => pile.id === id);
+const isDiscardPile = (pile) => pile?.id === 'discard' || pile?.pileType === 'discard';
 const emojiSegments = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const isEmojiReaction = (value) => typeof value === 'string' && value.length <= 16 && [...emojiSegments.segment(value)].length === 1 && /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(value);
 const reject = (error = 'That table action is not available.') => ({ ok: false, error });
 const cleanupEmptyPile = (room, pile) => {
-  if (!pile || pile.cards.length || pile.kind === 'deck' || pile.kind === 'hand' || pile.id === 'discard') return;
+  if (!pile || pile.cards.length || pile.kind === 'deck' || pile.kind === 'hand' || isDiscardPile(pile)) return;
   const index = room.piles.indexOf(pile);
   if (index >= 0) room.piles.splice(index, 1);
 };
@@ -162,6 +163,8 @@ export function applyTableAction(room, playerId, payload = {}) {
     const pile = findPile(room, payload.pileId);
     if (pile?.kind !== 'tableau' || !['stack', 'fan', 'fan-stack', 'grid'].includes(payload.layout)) return reject('Choose a card stack and layout.');
     pile.layout = payload.layout;
+    if(Number.isFinite(Number(payload.x)))pile.x=Math.min(94,Math.max(6,Number(payload.x)));
+    if(Number.isFinite(Number(payload.y)))pile.y=Math.min(78,Math.max(18,Number(payload.y)));
     if (payload.layout === 'fan-stack') pile.fanGroups ||= pile.cards.length ? [pile.cards.map(card=>card.id)] : [];
     else delete pile.fanGroups;
   } else if (type === 'pile:split-top-fan') {
@@ -173,7 +176,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     room.piles.push({id:`table-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:'',kind:'tableau',layout:'fan',x:Math.min(94,pile.x+4),y:Math.min(78,pile.y+4),cards});
     if(pile.fanGroups.length<2){pile.layout='fan';delete pile.fanGroups;}
   } else if (type === 'pile:delete') {
-    const index = room.piles.findIndex((pile) => pile.id === payload.pileId && pile.kind !== 'deck' && pile.kind !== 'hand');
+    const index = room.piles.findIndex((pile) => pile.id === payload.pileId && pile.kind !== 'deck' && pile.kind !== 'hand' && pile.id !== 'discard');
     if (index < 0) return reject('That pile cannot be deleted.');
     if (room.piles[index].cards.length) return reject('Only an empty pile can be deleted.');
     room.piles.splice(index, 1);
@@ -191,7 +194,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     const cards=[...from.cards],sourceGroups=from.layout==='fan-stack'&&from.fanGroups?.length?from.fanGroups.map(group=>[...group]):[cards.map(card=>card.id)];
     if(to.kind==='hand'){for(const card of cards){card.ownerId=to.ownerId;card.faceUp=true;}}
     else if(to.kind==='deck'){for(const card of cards){card.ownerId=null;card.faceUp=false;}}
-    else if(to.id==='discard'){for(const card of cards){card.ownerId=null;card.faceUp=true;}}
+    else if(isDiscardPile(to)){for(const card of cards){card.ownerId=null;card.faceUp=true;}}
     else if(to.kind==='tableau'){
       if(payload.mode==='fan-stack'){
         to.layout='fan-stack';to.fanGroups ||= to.cards.length?[to.cards.map(card=>card.id)]:[];to.fanGroups.push(...sourceGroups);
@@ -202,8 +205,8 @@ export function applyTableAction(room, playerId, payload = {}) {
     to.cards.push(...cards);from.cards=[];delete from.fanGroups;cleanupEmptyPile(room,from);
   } else if (type === 'return-stack') {
     const from = findPile(room, payload.pileId), to = findPile(room, payload.toId);
-    if (from?.kind !== 'tableau' || !from.cards.length || !['deck', 'discard'].includes(to?.id)) return reject('Choose a stack and the deck or discard pile.');
-    for (const card of from.cards) { card.ownerId = null; card.faceUp = to.id === 'discard'; }
+    if (from?.kind !== 'tableau' || !from.cards.length || !(to?.id==='deck'||isDiscardPile(to))) return reject('Choose a stack and the deck or discard pile.');
+    for (const card of from.cards) { card.ownerId = null; card.faceUp = isDiscardPile(to); }
     to.cards.push(...from.cards); from.cards = []; cleanupEmptyPile(room, from);
   } else if (type === 'reset-board') {
     const deckDefinition = getDeck(room.settings.deckId);
@@ -258,7 +261,7 @@ export function applyTableAction(room, playerId, payload = {}) {
     for (const card of cards) {
       if (to.kind==='hand') { card.ownerId=to.ownerId; card.faceUp=true; }
       else if (to.kind==='deck') { card.ownerId=null; card.faceUp=false; }
-      else if (to.id==='discard') { card.ownerId=null; card.faceUp=true; }
+      else if (isDiscardPile(to)) { card.ownerId=null; card.faceUp=true; }
       else if (card.ownerId) card.ownerId=null;
     }
     to.cards.push(...cards);
@@ -312,11 +315,22 @@ export function applyTableAction(room, playerId, payload = {}) {
     const [card] = from.cards.splice(index, 1); pruneFanGroups(from,[card.id]);
     if (to.kind === 'hand') { card.ownerId = to.ownerId; card.faceUp = true; }
     else if (to.kind === 'deck') { card.ownerId = null; card.faceUp = false; }
+    else if(isDiscardPile(to)){card.ownerId=null;card.faceUp=true;}
     else if (from.kind === 'hand') card.ownerId = null;
     to.cards.push(card); cleanupEmptyPile(room, from);
   } else if (type === 'pile:create') {
     const index = room.piles.filter((pile) => pile.kind === 'shared').length;
-    room.piles.push({ id: `pile-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name: (payload.name || `Pile ${index}`).slice(0,24), kind: 'shared', x: 30 + (index % 5) * 10, y: 47 + (index % 2) * 12, cards: [] });
+    const pileType=payload.pileType==='discard'?'discard':'cards';
+    room.piles.push({ id: `pile-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name: (payload.name || (pileType==='discard'?`Discard ${index}`:`Pile ${index}`)).slice(0,24), kind: 'shared', pileType, x: 30 + (index % 5) * 10, y: 47 + (index % 2) * 12, cards: [] });
+  } else if (type === 'pile:absorb-to-discard') {
+    const requested=payload.pileId?findPile(room,payload.pileId):null;if(payload.pileId&&!isDiscardPile(requested))return reject('Choose a discard pile.');
+    const discard=requested||findPile(room,'discard');if(!discard)return reject('The discard pile is unavailable.');
+    const sources=room.piles.filter(pile=>pile.kind!=='deck'&&pile.kind!=='hand'&&!isDiscardPile(pile)&&pile.cards.length);
+    if(!sources.length)return reject('There are no table cards to absorb.');
+    const cards=sources.flatMap(pile=>pile.cards);
+    for(const card of cards){card.ownerId=null;card.faceUp=true;}
+    discard.cards.push(...cards);
+    for(const pile of sources){pile.cards=[];delete pile.fanGroups;cleanupEmptyPile(room,pile);}
   } else if (type === 'pile:rename') {
     const pile=findPile(room,payload.pileId),name=String(payload.name||'').trim().slice(0,24);
     if(!pile||pile.kind!=='shared'||!name)return reject('Choose a valid name for this pile.');

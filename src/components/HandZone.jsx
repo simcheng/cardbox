@@ -17,8 +17,7 @@ export default function HandZone({ hand, playerId, canPlay = true, selectedIds =
   },[hand?.cards.length,collapsed]);
   return <div className={`table-hand-zone ${collapsed?'hand-collapsed':''} ${receivedDrawCue?'action-draw':''} ${cue?.type==='sort-hand'&&cue.playerId===playerId?'action-sort-hand':''}`}>
     <div className="hand-zone-header">
-      <div className="table-hand-label">YOUR HAND <b>{hand?.cards.length||0}</b></div>
-      <button className="hand-visibility-toggle" onClick={onToggle} aria-label={collapsed?'Show hand':'Hide hand'} title={collapsed?'Show hand':'Hide hand'}>{collapsed?'↑':'↓'}</button>
+      <div className="table-hand-label"><span>YOUR HAND <b>{hand?.cards.length||0}</b></span><button className="hand-visibility-toggle" onClick={onToggle} aria-label={collapsed?'Show hand':'Hide hand'} title={collapsed?'Show hand':'Hide hand'}>{collapsed?'↑':'↓'}</button></div>
       <div className="hand-tools">
         <button className="hand-draw" disabled={!canPlay} onClick={onDraw}>＋ Draw card</button>
         <button disabled={!hand?.cards.length} onClick={()=>onSort('suit')}>Sort suit</button>

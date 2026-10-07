@@ -35,7 +35,7 @@ function App() {
   const [theme, setTheme] = useState(localStorage.getItem('cardtable:theme') || 'light');
   const [handCollapsed, setHandCollapsed] = useState(false), [pileDrag, setPileDrag] = useState(null);
   const [contextMenu, setContextMenu] = useState(null), [cue, setCue] = useState(null);
-  const chatEnd = useRef(null), touchStart = useRef(null), cardPointer = useRef(null), selectionPointer = useRef(null), ignoreClick = useRef(false), tableRef = useRef(null), tableActionsButtonRef=useRef(null),tableActionsMenuRef=useRef(null);
+  const chatEnd = useRef(null), touchStart = useRef(null), cardPointer = useRef(null), selectionPointer = useRef(null), ignoreClick = useRef(false), joinInFlightRef=useRef(false),tableRef = useRef(null), tableActionsButtonRef=useRef(null),tableActionsMenuRef=useRef(null);
   const activeRoomIdRef=useRef(initialRoom||'');
   const [tableActionsStyle,setTableActionsStyle]=useState({});
   const cardMoveFrame = useRef(null), pileMoveFrame = useRef(null), dragCleanupTimer=useRef(null), dragGhostRef=useRef(null),dragLatestPositionRef=useRef(null);
@@ -64,6 +64,9 @@ function App() {
     clearSelection(); setPreview(null); setPendingPlacement(null);
   }
   function setColorTheme(next) { setTheme(next); localStorage.setItem('cardtable:theme', next); }
+  function viewRotation(){const players=room?.players.filter(player=>player.online||player.id===playerId)||[],index=Math.max(0,players.findIndex(player=>player.id===playerId));return 360*index/Math.max(1,players.length);}
+  function viewToTablePoint(x,y){const angle=-viewRotation()*Math.PI/180,dx=x-50,dy=y-50;return{x:50+dx*Math.cos(angle)-dy*Math.sin(angle),y:50+dx*Math.sin(angle)+dy*Math.cos(angle)};}
+  function moveTablePointByViewDelta(pile,dx,dy){const angle=-viewRotation()*Math.PI/180;return{x:pile.x+dx*Math.cos(angle)-dy*Math.sin(angle),y:pile.y+dx*Math.sin(angle)+dy*Math.cos(angle)};}
 
   function pileAtPoint(clientX,clientY,excludeIds=[],stopAtExcluded=false,layersOverride=null) {
     const excluded=new Set(excludeIds);
@@ -83,15 +86,20 @@ function App() {
     const join = () => {
       const roomId=activeRoomIdRef.current;
       if (!roomId || !name.trim()) return;
-      socket.emit('room:join', { roomId, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(roomId)), playerToken:sessionStorage.getItem(playerTokenKey(roomId)) }, (r) => {
-        if (r.ok) applyRoom(r); else setError(r.error);
+      const savedPlayerId=sessionStorage.getItem(playerKey(roomId)),savedPlayerToken=sessionStorage.getItem(playerTokenKey(roomId));
+      if(!savedPlayerId||!savedPlayerToken||joinInFlightRef.current)return;
+      joinInFlightRef.current=true;
+      socket.emit('room:join', { roomId, playerName: name.trim(), playerId:savedPlayerId, playerToken:savedPlayerToken }, (r) => {
+        joinInFlightRef.current=false;if (r.ok) applyRoom(r); else setError(r.error);
       });
     };
     socket.on('connect', join);
+    const onDisconnect=()=>{joinInFlightRef.current=false;};
+    socket.on('disconnect',onDisconnect);
     socket.on('room:update', setRoom);
     const onCue = (event) => { setCue(event); if(['chat','chat:react'].includes(event.type)&&event.playerId!==viewerRef.current&&!chatOpenRef.current)setUnreadChat(count=>count+1); setTimeout(()=>setCue((current)=>current?.id===event.id?null:current),['chat','chat:react'].includes(event.type)?2600:900); };
     socket.on('table:cue', onCue);
-    return () => { socket.off('connect', join); socket.off('room:update', setRoom); socket.off('table:cue', onCue); };
+    return () => { socket.off('connect', join); socket.off('disconnect',onDisconnect); socket.off('room:update', setRoom); socket.off('table:cue', onCue); };
   }, [initialRoom, name]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [room?.chat?.length]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2200); return () => clearTimeout(t); }, [toast]);
@@ -118,7 +126,12 @@ function App() {
   }
   function join() {
     if (!name.trim()) return setError('Add a name to join the table.');
-    socket.emit('room:join', { roomId: roomCode, playerName: name.trim(), playerId: sessionStorage.getItem(playerKey(roomCode.toUpperCase())), playerToken:sessionStorage.getItem(playerTokenKey(roomCode.toUpperCase())) }, (r) => r.ok ? applyRoom(r) : setError(r.error));
+    if(joinInFlightRef.current)return;
+    const normalizedRoom=roomCode.trim().toUpperCase();
+    let requestedId=sessionStorage.getItem(playerKey(normalizedRoom)),requestedToken=sessionStorage.getItem(playerTokenKey(normalizedRoom));
+    if(!requestedId||!requestedToken){requestedId=crypto.randomUUID();requestedToken=crypto.randomUUID();sessionStorage.setItem(playerKey(normalizedRoom),requestedId);sessionStorage.setItem(playerTokenKey(normalizedRoom),requestedToken);}
+    joinInFlightRef.current=true;
+    socket.emit('room:join', { roomId: normalizedRoom, playerName: name.trim(), playerId: requestedId, playerToken:requestedToken }, (r) => {joinInFlightRef.current=false;r.ok?applyRoom(r):setError(r.error)});
   }
   const action = (type, extra = {}, onComplete) => socket.emit('table:action', { type, ...extra }, (r) => { if (!r?.ok && r?.error) setToast(r.error); onComplete?.(r); });
   useEffect(()=>{
@@ -139,7 +152,18 @@ function App() {
   },[menu,isHost,canPlay]);
   function copyInvite() { setInviteOpen(true); }
   function openContextMenu(event, target) {
-    if(target.quickLayout){event.preventDefault();const pile=room?.piles.find(item=>item.id===target.pileId);if(pile?.kind==='tableau')action('pile:layout',{pileId:pile.id,layout:pile.layout==='fan'?'stack':'fan'});return;}
+    if(target.quickLayout){event.preventDefault();const pile=room?.piles.find(item=>item.id===target.pileId);if(pile?.kind==='tableau'){
+      const layout=pile.layout==='fan'?'stack':'fan',bounds=tableRef.current?.getBoundingClientRect();let x,y;
+      if(layout==='fan'&&bounds&&event.currentTarget?.classList?.contains('pile-grab')){
+        const usableWidth=Math.max(140,bounds.width-24),count=pile.cards.length,columns=Math.min(count,Math.max(1,Math.floor((usableWidth-67)/24)+1)),rows=Math.ceil(count/columns),step=Math.min(24,Math.max(0,(usableWidth-67)/Math.max(1,columns-1))),width=Math.max(74,67+step*Math.max(0,columns-1)),height=102+Math.max(0,rows-1)*29,angle=viewRotation()*Math.PI/180,halfWidth=(width*Math.abs(Math.cos(angle))+height*Math.abs(Math.sin(angle)))/2,halfHeight=(width*Math.abs(Math.sin(angle))+height*Math.abs(Math.cos(angle)))/2,button=event.currentTarget.getBoundingClientRect(),zone=(event.currentTarget.closest('.pile-zone')||event.currentTarget).getBoundingClientRect();
+        // The fan controls sit on the outer AABB after the cards rotate. Move
+        // the pile center by the corresponding view-space offset so the grab
+        // control itself remains under the double-click point.
+        const viewX=(button.left+button.width/2-halfWidth+12-bounds.left)/bounds.width*100,viewY=(button.top+button.height/2+halfHeight+28-bounds.top)/bounds.height*100,startX=(zone.left+zone.width/2-bounds.left)/bounds.width*100,startY=(zone.top+zone.height/2-bounds.top)/bounds.height*100,startModel=viewToTablePoint(startX,startY),modelPoint=moveTablePointByViewDelta({...pile,...startModel},viewX-startX,viewY-startY);
+        x=Math.min(94,Math.max(6,modelPoint.x));y=Math.min(78,Math.max(18,modelPoint.y));
+      }
+      action('pile:layout',{pileId:pile.id,layout,...(x!==undefined?{x,y}:{})});
+    }return;}
     const rect = event.currentTarget?.getBoundingClientRect?.();
     const belongsToSelection=(target.cardId&&selected.some(item=>item.card.id===target.cardId))||(target.pileId&&selectedPileIds.includes(target.pileId));
     const selectionCards=belongsToSelection?selected.filter(item=>!selectedPileIds.includes(item.pileId)):[];
@@ -190,7 +214,7 @@ function App() {
     for(const zone of surface.querySelectorAll('.tableau-zone')){
       const pile=room?.piles.find(item=>item.id===zone.dataset.placeId);if(!pile)continue;
       const box=zone.getBoundingClientRect();
-      const cards=[...zone.querySelectorAll('.playing-card')].map((element,index)=>{const cardBox=element.getBoundingClientRect();return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,index:Number(element.style.getPropertyValue('--fan'))||index,rect:{left:cardBox.left,right:cardBox.right,top:cardBox.top,bottom:cardBox.bottom}};});
+      const cards=[...zone.querySelectorAll('.playing-card')].map((element,index)=>{const cardBox=element.getBoundingClientRect(),order=Number(element.style.getPropertyValue('--fan-order'));return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,row:Number(element.style.getPropertyValue('--fan-row'))||0,index:Number.isFinite(order)?order:index,rect:{left:cardBox.left,right:cardBox.right,top:cardBox.top,bottom:cardBox.bottom}};});
       piles.set(pile.id,{rect:{left:box.left,right:box.right,top:box.top,bottom:box.bottom,width:box.width,height:box.height},cards});
     }
     return {width:rect.width,height:rect.height,updatedAt:room?.updatedAt,piles};
@@ -220,30 +244,45 @@ function App() {
     const piles=hitId?room.piles.filter(pile=>pile.id===hitId&&!sourceIds.includes(pile.id)).map(pile=>({...pile,rect:geometry?.piles.get(hitId)?.rect||hitPile.getBoundingClientRect()})):[];
     const directHit = hitId ? piles.filter((pile) => pile.id === hitId) : piles;
     const spot=resolveTablePlacement(clientX, clientY, tableRect, directHit, hitId);
-    if(!spot?.targetId)return spot;
+    if(!spot?.targetId){if(!spot)return spot;const modelPoint=viewToTablePoint(spot.x,spot.y);return{...spot,x:Math.min(94,Math.max(6,modelPoint.x)),y:Math.min(78,Math.max(18,modelPoint.y)),viewX:spot.x,viewY:spot.y};}
     const target=directHit.find(pile=>pile.id===spot.targetId);
     if(!target)return spot;
     const centerX=(target.rect.left+target.rect.width/2-tableRect.left)/tableRect.width*100;
     const centerY=(target.rect.top+target.rect.height/2-tableRect.top)/tableRect.height*100;
     let previewX=spot.previewX,previewY=spot.previewY,insertAt=spot.insertAt,fanGroup=spot.fanGroup;
     if(spot.mode==='insert'){
-      const cards=geometry?.piles.get(hitId)?.cards||[...hitPile.querySelectorAll('.playing-card')].map((element,index)=>{const rect=element.getBoundingClientRect();return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,index:Number(element.style.getPropertyValue('--fan'))||index,rect};});
+      const cards=geometry?.piles.get(hitId)?.cards||[...hitPile.querySelectorAll('.playing-card')].map((element,index)=>{const rect=element.getBoundingClientRect(),order=Number(element.style.getPropertyValue('--fan-order'));return{id:element.dataset.cardId,group:Number(element.style.getPropertyValue('--fan-group'))||0,row:Number(element.style.getPropertyValue('--fan-row'))||0,index:Number.isFinite(order)?order:index,rect};});
       const movingIds=new Set(moving.map(item=>item.card.id));
+      const radians=viewRotation()*Math.PI/180,axisX=Math.cos(radians),axisY=Math.sin(radians),targetCenterX=target.rect.left+target.rect.width/2,targetCenterY=target.rect.top+target.rect.height/2;
+      const cardProgress=(item)=>((item.rect.left+item.rect.right)/2-targetCenterX)*axisX+((item.rect.top+item.rect.bottom)/2-targetCenterY)*axisY;
+      const cursorProgress=(clientX-targetCenterX)*axisX+(clientY-targetCenterY)*axisY;
       const originalGroups=[...new Set(cards.map(item=>item.group))].sort((a,b)=>a-b);
       const groups=target.layout==='fan-stack'?originalGroups.filter(group=>cards.some(item=>item.group===group&&!movingIds.has(item.id))):originalGroups;
       if(cards.length){
         let selectedGroup=null;
-        if(target.layout==='fan-stack'){const bounds=new Map();for(const item of cards){if(movingIds.has(item.id))continue;const b=bounds.get(item.group)||{left:Infinity,right:-Infinity};b.left=Math.min(b.left,item.rect.left);b.right=Math.max(b.right,item.rect.right);bounds.set(item.group,b);}selectedGroup=groups.sort((a,b)=>Math.abs(clientX-(bounds.get(a).left+bounds.get(a).right)/2)-Math.abs(clientX-(bounds.get(b).left+bounds.get(b).right)/2))[0];fanGroup=originalGroups.indexOf(selectedGroup);}
+        if(target.layout==='fan-stack'){const centers=new Map();for(const item of cards){if(movingIds.has(item.id))continue;const entry=centers.get(item.group)||{x:0,y:0,count:0};entry.x+=(item.rect.left+item.rect.right)/2;entry.y+=(item.rect.top+item.rect.bottom)/2;entry.count++;centers.set(item.group,entry);}selectedGroup=groups.sort((a,b)=>{const ac=centers.get(a),bc=centers.get(b),ad=Math.hypot(clientX-ac.x/ac.count,clientY-ac.y/ac.count),bd=Math.hypot(clientX-bc.x/bc.count,clientY-bc.y/bc.count);return ad-bd;})[0];fanGroup=originalGroups.indexOf(selectedGroup);}
         const allOrdered=cards.filter(item=>target.layout!=='fan-stack'||item.group===selectedGroup).sort((a,b)=>a.index-b.index);
         const ordered=allOrdered.filter(item=>!movingIds.has(item.id));
-        const postRemovalAt=ordered.filter(item=>clientX>(item.rect.left+item.rect.right)/2).length;
-        insertAt=postRemovalAt;
-        const before=ordered[postRemovalAt],after=ordered[postRemovalAt-1];
-        previewX=before?before.rect.left:after?.rect.right??spot.previewX;
-        previewY=before?(before.rect.top+before.rect.bottom)/2:after?(after.rect.top+after.rect.bottom)/2:spot.previewY;
+        let rowOrdered=ordered,rowOffset=0;
+        if(target.layout==='fan'){
+          const rows=[...new Set(ordered.map(item=>item.row))];
+          if(rows.length>1){const rowCenters=rows.map(row=>{const items=ordered.filter(item=>item.row===row);return{row,x:items.reduce((sum,item)=>sum+(item.rect.left+item.rect.right)/2,0)/items.length,y:items.reduce((sum,item)=>sum+(item.rect.top+item.rect.bottom)/2,0)/items.length};});
+            const chosenRow=rowCenters.sort((a,b)=>Math.hypot(clientX-a.x,clientY-a.y)-Math.hypot(clientX-b.x,clientY-b.y))[0].row;
+            rowOffset=ordered.filter(item=>item.row<chosenRow).length;rowOrdered=ordered.filter(item=>item.row===chosenRow);
+          }
+        }
+        const slot=rowOrdered.filter(item=>cardProgress(item)<cursorProgress).length;
+        insertAt=rowOffset+slot;
+        const before=rowOrdered[slot],after=rowOrdered[slot-1];
+        let markerX,markerY;
+        if(before&&after){markerX=((before.rect.left+before.rect.right)+(after.rect.left+after.rect.right))/4;markerY=((before.rect.top+before.rect.bottom)+(after.rect.top+after.rect.bottom))/4;}
+        else if(before){markerX=(before.rect.left+before.rect.right)/2-axisX*14;markerY=(before.rect.top+before.rect.bottom)/2-axisY*14;}
+        else if(after){markerX=(after.rect.left+after.rect.right)/2+axisX*14;markerY=(after.rect.top+after.rect.bottom)/2+axisY*14;}
+        if(markerX!==undefined){previewX=markerX;previewY=markerY;}
       }
     }
-    return {...spot,insertAt,fanGroup,x:Math.min(94,Math.max(6,centerX+(spot.mode==='fan'?3:0))),y:centerY,previewX:(previewX-tableRect.left)/tableRect.width*100,previewY:(previewY-tableRect.top)/tableRect.height*100};
+    const modelPoint=viewToTablePoint(centerX+(spot.mode==='fan'?3:0),centerY);
+    return {...spot,insertAt,fanGroup,x:Math.min(94,Math.max(6,modelPoint.x)),y:Math.min(78,Math.max(18,modelPoint.y)),viewX:centerX+(spot.mode==='fan'?3:0),viewY:centerY,previewX:(previewX-tableRect.left)/tableRect.width*100,previewY:(previewY-tableRect.top)/tableRect.height*100};
   }
   function previewAt(e,movingCards=null) {
     const spot = placementAt(e.clientX,e.clientY,movingCards);
@@ -302,6 +341,7 @@ function App() {
     if (cardMoveFrame.current !== null) cancelAnimationFrame(cardMoveFrame.current);
     cardMoveFrame.current = null;
     cardPointer.current = null;
+    setPendingPlacement(null);
     if (active.dragging) {
       if(dragCleanupTimer.current)clearTimeout(dragCleanupTimer.current);
       dragCleanupTimer.current=setTimeout(clearDragVisual,5000);
@@ -334,7 +374,7 @@ function App() {
         else { clearSelection(); setPendingPlacement(null); setPreview(null);clearDragVisual(); }
       }
       ignoreClick.current = true; setTimeout(()=>{ignoreClick.current=false;},250);
-    } else setPreview(null);
+      } else { setPreview(null);setPendingPlacement(null); }
   }
   function onCardPointerCancel(e) {
     if (cardPointer.current?.pointerId !== e.pointerId) return;
@@ -345,11 +385,12 @@ function App() {
   function onPilePointerDown(e, pile) {
     if (!canPlay || pile.kind === 'hand' || (e.target.closest('.playing-card') && !e.target.closest('.pile-grab'))) return;
     const bounds = tableRef.current.getBoundingClientRect();
-    const pileRect = e.currentTarget.getBoundingClientRect();
+    const pileRect = (e.currentTarget.closest?.('.pile-zone')||e.currentTarget).getBoundingClientRect();
     setPreview(null);setPendingPlacement(null);
     if (pileMoveFrame.current !== null) cancelAnimationFrame(pileMoveFrame.current);
     pileMoveFrame.current = null;
-    touchStart.current = { x: e.clientX, y: e.clientY, pile, pointerId: e.pointerId, bounds, moved: false, latest: null, grabOffsetX: e.clientX-(pileRect.left+pileRect.width/2), grabOffsetY: e.clientY-(pileRect.top+pileRect.height/2) };
+    const startViewX=(pileRect.left+pileRect.width/2-bounds.left)/bounds.width*100,startViewY=(pileRect.top+pileRect.height/2-bounds.top)/bounds.height*100,startModel=viewToTablePoint(startViewX,startViewY);
+    touchStart.current = { x: e.clientX, y: e.clientY, pile, startModel, pointerId: e.pointerId, bounds, moved: false, latest: null, startViewX,startViewY,grabOffsetX: e.clientX-(pileRect.left+pileRect.width/2), grabOffsetY: e.clientY-(pileRect.top+pileRect.height/2) };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onPilePointerMove(e) {
@@ -357,7 +398,8 @@ function App() {
     if (Math.hypot(e.clientX-active.x,e.clientY-active.y) > 7&&!active.moved) {
       active.moved = true;
       const bounds=active.bounds;
-      setPileDrag({pileId:active.pile.id,x:Math.min(94,Math.max(6,(e.clientX-active.grabOffsetX-bounds.left)/bounds.width*100)),y:Math.min(78,Math.max(18,(e.clientY-active.grabOffsetY-bounds.top)/bounds.height*100))});
+      const model=moveTablePointByViewDelta({...active.pile,...active.startModel},(e.clientX-active.grabOffsetX-bounds.left)/bounds.width*100-active.startViewX,(e.clientY-active.grabOffsetY-bounds.top)/bounds.height*100-active.startViewY);
+      setPileDrag({pileId:active.pile.id,x:Math.min(94,Math.max(6,model.x)),y:Math.min(78,Math.max(18,model.y))});
     }
     if (!active.moved) return;
     active.latest = { clientX:e.clientX, clientY:e.clientY };
@@ -367,7 +409,8 @@ function App() {
         if (touchStart.current !== active || !active.moved || !active.latest) return;
         const {clientX,clientY}=active.latest, bounds=active.bounds;
         const targetId=pileAtPoint(clientX,clientY,[active.pile.id])?.pile.id||null;
-        setPileDrag({ pileId: active.pile.id, targetId, x: Math.min(94,Math.max(6,(clientX-active.grabOffsetX-bounds.left)/bounds.width*100)), y: Math.min(78,Math.max(18,(clientY-active.grabOffsetY-bounds.top)/bounds.height*100)) });
+        const model=moveTablePointByViewDelta({...active.pile,...active.startModel},(clientX-active.grabOffsetX-bounds.left)/bounds.width*100-active.startViewX,(clientY-active.grabOffsetY-bounds.top)/bounds.height*100-active.startViewY);
+        setPileDrag({ pileId: active.pile.id, targetId, x: Math.min(94,Math.max(6,model.x)), y: Math.min(78,Math.max(18,model.y)) });
       });
     }
   }
@@ -378,8 +421,9 @@ function App() {
     touchStart.current = null;
     if (active.moved) {
       const bounds=active.bounds;
-      const x=Math.min(94,Math.max(6,(e.clientX-active.grabOffsetX-bounds.left)/bounds.width*100));
-      const y=Math.min(78,Math.max(18,(e.clientY-active.grabOffsetY-bounds.top)/bounds.height*100));
+      const point=moveTablePointByViewDelta({...active.pile,...active.startModel},(e.clientX-active.grabOffsetX-bounds.left)/bounds.width*100-active.startViewX,(e.clientY-active.grabOffsetY-bounds.top)/bounds.height*100-active.startViewY);
+      const x=Math.min(94,Math.max(6,point.x));
+      const y=Math.min(78,Math.max(18,point.y));
       setPileDrag({pileId:active.pile.id,x,y});
       const layers=document.elementsFromPoint?.(e.clientX,e.clientY)||[document.elementFromPoint(e.clientX,e.clientY)].filter(Boolean);
       const handTarget=layers.some(element=>element.closest?.('.table-hand-zone'));
@@ -432,8 +476,17 @@ function App() {
     selectionPointer.current=null;
     if (gesture.moved) {
       const box={left:Math.min(gesture.startX,gesture.x),right:Math.max(gesture.startX,gesture.x),top:Math.min(gesture.startY,gesture.y),bottom:Math.max(gesture.startY,gesture.y)};
-      const hits=[...tableRef.current.querySelectorAll('.playing-card:not(.drag-source)')].filter((element)=>{const pile=room.piles.find(p=>p.id===element.closest('.pile-zone')?.dataset.placeId);if(pile?.id==='deck'&&pile.cards.at(-1)?.id!==element.dataset.cardId)return false;const rect=element.getBoundingClientRect();return rect.right>=box.left&&rect.left<=box.right&&rect.bottom>=box.top&&rect.top<=box.bottom;});
-      const wholePiles=[...tableRef.current.querySelectorAll('.tableau-zone')].filter(element=>{const rect=element.getBoundingClientRect();return rect.left>=box.left&&rect.right<=box.right&&rect.top>=box.top&&rect.bottom<=box.bottom;}).map(element=>element.dataset.placeId);
+      const hits=[...tableRef.current.querySelectorAll('.playing-card:not(.drag-source)')].filter((element)=>{const pile=room.piles.find(p=>p.id===element.closest('.pile-zone')?.dataset.placeId);const isTopOnly=pile?.id==='deck'||pile?.id==='discard'||pile?.pileType==='discard';if(isTopOnly&&pile.cards.at(-1)?.id!==element.dataset.cardId)return false;const rect=element.getBoundingClientRect();return rect.right>=box.left&&rect.left<=box.right&&rect.bottom>=box.top&&rect.top<=box.bottom;});
+      const wholePiles=[...tableRef.current.querySelectorAll('.tableau-zone')].filter(element=>{
+        // The pile wrapper stays axis-aligned while the rendered cards rotate
+        // with each viewer's POV. Use the actual visible card bounds so a
+        // marquee around a vertical fan still selects the pile as one object.
+        const cards=[...element.querySelectorAll('.pile-cards .playing-card:not(.drag-source)')];
+        if(!cards.length)return false;
+        const rects=cards.map(card=>card.getBoundingClientRect());
+        const visible={left:Math.min(...rects.map(rect=>rect.left)),right:Math.max(...rects.map(rect=>rect.right)),top:Math.min(...rects.map(rect=>rect.top)),bottom:Math.max(...rects.map(rect=>rect.bottom))};
+        return visible.left>=box.left&&visible.right<=box.right&&visible.top>=box.top&&visible.bottom<=box.bottom;
+      }).map(element=>element.dataset.placeId);
       const found=hits.filter(element=>!wholePiles.includes(element.closest('.pile-zone')?.dataset.placeId)).map((element)=>{const cardId=element.dataset.cardId;const pile=room.piles.find(item=>item.cards.some(card=>card.id===cardId));const card=pile?.cards.find(item=>item.id===cardId);return card&&pile?{card,pileId:pile.id}:null;}).filter(Boolean);
       const nextPileIds=gesture.add?new Set(selectedPileIds):new Set();
       if(gesture.add)for(const id of wholePiles)nextPileIds.has(id)?nextPileIds.delete(id):nextPileIds.add(id);
@@ -464,12 +517,14 @@ function App() {
       <a className="brand" href="#"><span className="brand-mark">♧</span> cardtable</a>
       <div className="welcome-actions"><span className="live-note"><i/> A table for everyone</span></div>
     </header>
-    <section className="welcome-card">
+    <section className={`welcome-card ${initialRoom?'invite-join-card':''}`}>
       <div className="eyebrow"><span>✦</span> YOUR GAME, YOUR RULES</div>
-      <h1>Make room<br/>for <em>one more.</em></h1>
-      <p className="intro">A relaxed place to play cards together.<br/>No scorekeeping required.</p>
-      <label className="welcome-field" htmlFor="guest"><span>Your name</span><input id="guest" value={name} onChange={(e)=>setName(e.target.value)} placeholder="What should we call you?" maxLength={24} onKeyDown={(e)=>e.key==='Enter'&&create()}/></label>
+      <h1>{initialRoom?<>You’re invited<br/>to the table.</>:<>Make room<br/>for <em>one more.</em></>}</h1>
+      <p className="intro">{initialRoom?'Enter your guest name to join the existing lobby.':'A relaxed place to play cards together. No scorekeeping required.'}</p>
+      <label className="welcome-field" htmlFor="guest"><span>Your name</span><input id="guest" value={name} onChange={(e)=>setName(e.target.value)} placeholder="What should we call you?" maxLength={24} onKeyDown={(e)=>e.key==='Enter'&&(initialRoom?join():create())}/></label>
       {error&&<div className="error-note" role="alert">{error}</div>}
+      {initialRoom&&<section className="welcome-action-section invite-join-section" aria-labelledby="join-heading"><h2 id="join-heading">Join existing lobby</h2><div className="welcome-join-row"><label className="welcome-field"><span>Invite code</span><input value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e)=>e.key==='Enter'&&join()} aria-label="Invite code"/></label><button className="join-button" onClick={join}>Join lobby <span>↗</span></button></div></section>}
+      {!initialRoom&&<>
       <section className="welcome-action-section" aria-labelledby="create-heading">
         <h2 id="create-heading">Create a table</h2>
         <div className="welcome-options">
@@ -483,6 +538,7 @@ function App() {
         <h2 id="join-heading">Join a table</h2>
         <div className="welcome-join-row"><label className="welcome-field"><span>Invite code</span><input value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e)=>e.key==='Enter'&&join()} placeholder="Enter invite code" aria-label="Invite code"/></label><button className="join-button" onClick={join}>Join table</button></div>
       </section>
+      </>}
       <div className="welcome-foot"><span>♠</span> 52 cards · Infinite ways to play <span>♥</span></div>
     </section>
     <footer className="site-foot">BUILT FOR GAME NIGHT <span>·</span> JUST ADD FRIENDS</footer>
@@ -493,9 +549,9 @@ function App() {
   return <main className={`app-shell ${cue?`cue-${cue.type.replace(':','-')}`:''}`} data-theme={theme}>
     <header className="topbar"><a className="brand" href="/" onClick={(e)=>{e.preventDefault();socket.emit('room:leave');activeRoomIdRef.current='';history.pushState({},'',location.pathname);setRoom(null);setPlayerId('')}}><span className="brand-mark">♧</span> cardtable</a><div className="table-title"><span className="table-dot"/><div><b>{room.name}</b><small>{room.players.filter(p=>p.online).length} at the table</small></div></div><div className="top-actions"><button className="subtle-button invite-button" aria-label="Invite friends" onClick={()=>setInviteOpen(true)}>↗ <span>Invite friends</span></button><button className="icon-button settings-trigger" onClick={()=>setSettingsOpen(!settingsOpen)} aria-label="Settings">⚙</button><div className="profile-control"><button className={`avatar ${cue?.playerId===playerId?'action-actor':''}`} style={{'--avatar':self?.color}} title={self?.name} aria-label="Open profile menu" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}>{self?.emoji||self?.name?.slice(0,1).toUpperCase()}</button><ProfileMenu open={profileOpen} player={self} isHost={isHost} isCohost={isCohost} isModerator={isModerator} room={room} onInvite={()=>setInviteOpen(true)} onSettings={()=>setSettingsOpen(true)} onProfile={(values)=>action('profile',values)} onClose={()=>setProfileOpen(false)} onToast={setToast}/></div></div></header>
     <button className="chat-fab" onClick={toggleChat} aria-expanded={mobilePanel} aria-label={mobilePanel?'Close chat':'Open chat'} title="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10.2h-8.2l-4.6 3v-3H4.5z"/></svg>{unreadChat>0&&<i>{unreadChat}</i>}</button>
-    <div className="game-layout"><section className="play-area"><div className="table-heading"><div><span className="eyebrow light">THE TABLE</span><h2>Make yourself at home.</h2></div><div className="table-tools"><button ref={tableActionsButtonRef} className="more-button" aria-expanded={menu==='actions'} aria-label="Table actions" onClick={()=>setMenu(menu==='actions'?'':'actions')}><span>•••</span></button>{menu==='actions'&&<div ref={tableActionsMenuRef} style={tableActionsStyle} className="popover action-menu table-actions-menu"><b>Table actions</b>{canPlay&&<><button onClick={()=>{action('pile:create',{name:'New pile'});setMenu('')}}>＋ Add a pile</button><button onClick={()=>{action('shuffle',{pileId:'deck'});setMenu('')}}>↻ Shuffle the deck</button></>}<button onClick={()=>{setLedgerOpen(true);setMenu('')}}>◷ View action history</button>{isModerator&&<button onClick={()=>{setSettingsOpen(true);setMenu('')}}>⚙ Table settings</button>}</div>}</div></div>
+    <div className="game-layout"><section className="play-area"><div className="table-heading"><div><span className="eyebrow light">THE TABLE</span><h2>Make yourself at home.</h2></div><div className="table-tools"><button ref={tableActionsButtonRef} className="more-button" aria-expanded={menu==='actions'} aria-label="Table actions" onClick={()=>setMenu(menu==='actions'?'':'actions')}><span>•••</span></button>{menu==='actions'&&<div ref={tableActionsMenuRef} style={tableActionsStyle} className="popover action-menu table-actions-menu"><b>Table actions</b>{canPlay&&<><button onClick={()=>{action('pile:create',{name:'New pile'});setMenu('')}}>＋ Add a card pile</button><button onClick={()=>{action('pile:create',{name:'New discard pile',pileType:'discard'});setMenu('')}}>＋ Add a discard pile</button><button onClick={()=>{action('shuffle',{pileId:'deck'});setMenu('')}}>↻ Shuffle the deck</button></>}<button onClick={()=>{setLedgerOpen(true);setMenu('')}}>◷ View action history</button>{isModerator&&<button onClick={()=>{setSettingsOpen(true);setMenu('')}}>⚙ Table settings</button>}</div>}</div></div>
       <TableSurface room={room} playerId={playerId} tableRef={tableRef} selectedIds={selectedIds} selectedPileIds={selectedPileIds} selectionBox={selectionBox} preview={preview} previewCard={previewCard} previewCount={pendingPlacement?.cards?.length||dragCount} dragCount={dragCount} pileDrag={pileDrag} handZone={handZone} cue={cue} contextCardId={contextMenu?.cardId} dragCardId={dragCard?.id} draggedCardIds={draggedCardIds} dragPosition={dragPosition} dragOverHand={dragOverHand} onOpenContextMenu={openContextMenu} onSurfaceClick={onTableClick} onSurfacePointerDown={onSurfacePointerDown} onSurfacePointerMove={onSurfacePointerMove} onSurfacePointerUp={onSurfacePointerUp} onSurfacePointerCancel={onSurfacePointerCancel} onPileClick={onPileClick} onCardClick={onCardClick} onPilePointerDown={onPilePointerDown} onPilePointerMove={onPilePointerMove} onPilePointerUp={onPilePointerUp} onPilePointerCancel={onPilePointerCancel} onCardPointerDown={onCardPointerDown} onCardPointerMove={onCardPointerMove} onCardPointerUp={onCardPointerUp} onCardPointerCancel={onCardPointerCancel} onConfirmPlacement={commitPreview} onCancelPlacement={cancelPreview} pendingPlacement={pendingPlacement} dragGhostRef={dragGhostRef}/>
-      <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isModerator} selectedCount={selected.length} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
+      <ActionBar deckCount={deck?.cards.length||0} canUndo={room.canUndo} canPlay={canPlay} isHost={isModerator} selectedCount={selected.length} canAbsorb={room.piles.some(item=>item.kind!=='deck'&&item.kind!=='hand'&&item.id!=='discard'&&item.pileType!=='discard'&&item.cards.length>0)} onAction={action} onLedger={()=>setLedgerOpen(true)} onFlipSelected={()=>{if(selected.length)action('flip-cards',{cards:selected.map(item=>({cardId:item.card.id,fromId:item.pileId}))});clearSelection()}} onMoveSelection={moveSelection} onClearSelection={clearSelection}/>
     </section></div>
     <ChatDrawer open={mobilePanel} room={room} playerId={playerId} text={chatText} setText={setChatText} onSend={sendChat} onReact={(messageId,emoji)=>action('chat:react',{messageId,emoji})} onClose={()=>setMobilePanel(false)} onInvite={copyInvite} chatEnd={chatEnd} theme={theme}/>
     <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
