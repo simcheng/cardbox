@@ -25,7 +25,7 @@ export default function TableSurface({
     return()=>observer.disconnect();
   },[tableRef]);
   useEffect(()=>{
-    if(!['draw','deal'].includes(cue?.type)||!(cue.playerId===playerId||cue.recipientIds?.includes(playerId))){setDrawFlight(null);return;}
+    if(!['draw','deal'].includes(cue?.type)||cue.playerId===playerId||!cue.recipientIds?.includes(playerId)){setDrawFlight(null);return;}
     setDrawFlight(null);
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone');
@@ -39,7 +39,7 @@ export default function TableSurface({
   },[cue?.id,playerId,tableRef]);
   useEffect(()=>{
     const moving=['move','move-card','move-cards','move-stack','selection:move','place','place-cards','return-card','return-stack'].includes(cue?.type);
-    if(!moving){setMoveFlight(null);return;}
+    if(!moving||cue.playerId===playerId){setMoveFlight(null);return;}
     let frame=requestAnimationFrame(()=>{
       const surface=tableRef.current;if(!surface)return;
       const bounds=surface.getBoundingClientRect();
@@ -80,7 +80,7 @@ export default function TableSurface({
   const turnRemaining=room?.turn?.deadlineAt?Math.max(0,Math.ceil((room.turn.deadlineAt-turnClock)/1000)):null;
   return <div className="table-wrap">{room.turn?.enabled&&<div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}><span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`:'Time expired'}</small>}</span></div>}<div className="table-surface" ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
     <div className="table-seam"/>
-    {seats.map(({player,x,y})=><div className={`seat ${cue?.playerId===player.id||cue?.recipientIds?.includes(player.id)?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
+    {seats.map(({player,x,y})=><div className={`seat ${cue?.playerId!==playerId&&(cue?.playerId===player.id||cue?.recipientIds?.includes(player.id))?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
       <div className="seat-avatar" style={{'--avatar':player.color}}>{player.emoji||player.name.slice(0,1).toUpperCase()}<i className={player.online?'':'offline'}/></div>
       <span>{player.name}</span><small className="seat-count"><span className="hand-card-icon" aria-hidden="true">{Array.from({length:Math.min(4,player.handCount)},(_,i)=><i key={i}/>)}</span>{player.handCount>4&&<i className="hand-extra">+{player.handCount-4}</i>}<b>{player.handCount}</b> {player.handCount===1?'card':'cards'}</small>
       {cue?.type==='chat'&&cue.playerId===player.id&&cue.message&&<span className="seat-notification" key={cue.id}>{cue.message}</span>}

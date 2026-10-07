@@ -603,7 +603,7 @@ function App() {
     <SettingsDialog open={settingsOpen} isHost={isHost} isModerator={isModerator} players={room.players} playerId={playerId} theme={theme} onTheme={setColorTheme} onRoleChange={(targetId,role)=>action('host:assign',{targetId,role})} onKick={(targetId)=>action('player:kick',{targetId})} turn={room.turn} onTurn={(mode,timerSeconds)=>action(mode==='start'?'turn:start':mode==='stop'?'turn:stop':'turn:next',mode==='start'?{timerSeconds}: {})} settings={room.settings} onChange={(settings)=>action('settings',{settings})} onClose={()=>setSettingsOpen(false)}/>
     <InviteDialog open={inviteOpen} room={room} onClose={()=>setInviteOpen(false)} onToast={setToast}/>
     <TableContextMenu menu={contextMenu} room={room} playerId={playerId} canPlay={canPlay} onAction={action} onClose={()=>setContextMenu(null)}/>
-    <LedgerDialog open={ledgerOpen} entries={room.ledger||[]} onClose={()=>setLedgerOpen(false)}/>
+    <LedgerDialog open={ledgerOpen} entries={room.ledger||[]} roomName={room.name} onClose={()=>setLedgerOpen(false)}/>
     {toast&&<div className="toast">{toast}</div>}
   </main>;
 }

@@ -26,7 +26,7 @@ export default function HandZone({ hand, playerId, canPlay = true, selectedIds =
       </div>
     </div>
     {!collapsed&&<div className="table-hand-cards" ref={cardsRef}>
-      {hand?.cards.length ? hand.cards.map((card,index)=><Card key={card.id} card={card} index={index} style={{'--hand-count':hand.cards.length}} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggingSet.has(card.id)} actionCue={cue?.cardId===card.id||cue?.cardIds?.includes(card.id)} recent={cue?.cardId===card.id||cue?.cardIds?.includes(card.id)} onClick={(event)=>onCardClick(card,hand.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:hand.id,cardId:card.id})} onPointerDown={(e)=>onPointerDown(e,card,hand.id)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}/>) : <span className="empty-hand-inline">Your cards will appear here.</span>}
+      {hand?.cards.length ? hand.cards.map((card,index)=><Card key={card.id} card={card} index={index} style={{'--hand-count':hand.cards.length}} selected={selectedSet.has(card.id)||contextCardId===card.id} dragging={draggingSet.has(card.id)} actionCue={cue?.playerId!==playerId&&(cue?.cardId===card.id||cue?.cardIds?.includes(card.id))} recent={cue?.playerId!==playerId&&(cue?.cardId===card.id||cue?.cardIds?.includes(card.id))} onClick={(event)=>onCardClick(card,hand.id,event)} onContextMenu={(event)=>onOpenContextMenu(event,{pileId:hand.id,cardId:card.id})} onPointerDown={(e)=>onPointerDown(e,card,hand.id)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}/>) : <span className="empty-hand-inline">Your cards will appear here.</span>}
     </div>}
   </div>;
 }
