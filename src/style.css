@@ -274,14 +274,9 @@
 .app-shell .drag-ghost.is-group:after{inset:1px -1px -1px 1px;transform:rotate(1deg);}
 .app-shell .drag-ghost .playing-card{z-index:1;}
 .app-shell .drag-ghost .drag-count{z-index:2;}
-.app-shell .draw-flight{position:absolute;left:var(--draw-x);top:var(--draw-y);z-index:18;width:57px;height:80px;pointer-events:none;animation:draw-flight .42s cubic-bezier(.2,.75,.25,1) var(--draw-delay,0ms) both;}
-.app-shell .draw-flight>div{width:100%;height:100%;display:grid;place-items:center;border:1px solid #e1dfd5;border-radius:6px;background:#f5f1e7;color:#27634a;font-size:22px;box-shadow:0 8px 18px #061d1670;animation:draw-card-tilt .42s cubic-bezier(.2,.75,.25,1) var(--draw-delay,0ms) both;}
-.app-shell .move-flight{position:absolute;left:var(--move-x);top:var(--move-y);z-index:44;width:57px;height:80px;pointer-events:none;animation:move-flight .58s cubic-bezier(.2,.72,.25,1) var(--move-delay,0ms) both;}
-.app-shell .move-flight>div{width:100%;height:100%;display:grid;place-items:center;border:1px solid #e1dfd5;border-radius:6px;background:#f5f1e7;color:#27634a;font-size:22px;box-shadow:0 8px 18px #061d1670;animation:move-card-tilt .58s cubic-bezier(.2,.72,.25,1) var(--move-delay,0ms) both;}
-@keyframes draw-flight{from{left:var(--draw-x);top:var(--draw-y);opacity:.95}to{left:calc(var(--draw-x) + var(--draw-dx));top:calc(var(--draw-y) + var(--draw-dy));opacity:0}}
-@keyframes move-flight{from{left:var(--move-x);top:var(--move-y);opacity:.9}to{left:calc(var(--move-x) + var(--move-dx));top:calc(var(--move-y) + var(--move-dy));opacity:0}}
-@keyframes draw-card-tilt{from{transform:scale(.78) rotate(-9deg)}to{transform:scale(.76) rotate(7deg)}}
-@keyframes move-card-tilt{from{transform:scale(.72) rotate(-6deg)}to{transform:scale(.72) rotate(5deg)}}
+.app-shell .card-motion-flight{position:absolute;z-index:44;width:57px;height:80px;pointer-events:none;opacity:0;}
+.app-shell .card-motion-back{position:absolute;inset:0;display:grid;place-items:center;padding:4px;border:1px solid #e1dfd5;border-radius:6px;background:#f5f1e7;box-shadow:0 8px 18px #061d1670;}
+
 @keyframes card-action-cue{0%{filter:brightness(1.35)}100%{filter:none}}
 @media(max-width:390px){.app-shell .table-title{display:flex;max-width:27vw;gap:6px}.app-shell .table-title>div{gap:4px}.app-shell .table-title b{max-width:15vw;font-size:10px}.app-shell .table-title small{font-size:8px}.app-shell .topbar{gap:10px;padding-inline:12px}.welcome .create-form,.welcome .join-form{gap:8px}.welcome .primary-button,.welcome .join-button{padding-inline:10px;font-size:11px}}
 @media(max-width:700px){
@@ -694,9 +689,6 @@
 @media(max-width:700px){
   .app-shell .extra-menu.opens-left,.app-shell .extra-menu.opens-right{left:8px;right:8px;width:auto;min-width:0;max-width:none;}
   .app-shell .drag-ghost.is-group:before,.app-shell .drag-ghost.is-group:after{width:57px;height:80px;}
-}
-@media(max-width:700px) and (max-height:520px){
-  .app-shell .draw-flight{width:57px;height:80px;}
 }
 
 /* Keep cards fanned while hover and selection lift them above neighbors. */

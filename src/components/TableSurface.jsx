@@ -1,28 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Card from './Card.jsx';
-
-function objectCenter(surface, element) {
-  if (!surface || !element) return null;
-  const bounds = surface.getBoundingClientRect();
-  const visualTarget = element.classList?.contains('seat')
-    ? element.querySelector('.seat-avatar')
-    : element.classList?.contains('table-hand-zone')
-      ? element.querySelector('.table-hand-cards') || element
-      : element;
-  const cards = visualTarget.matches?.('.pile-zone,.table-hand-zone')
-    ? [...visualTarget.querySelectorAll('.pile-cards .playing-card,.table-hand-cards .playing-card')]
-    : [];
-  const rects = cards.map(card => card.getBoundingClientRect());
-  const rect = rects.length
-    ? {
-        left: Math.min(...rects.map(item => item.left)),
-        right: Math.max(...rects.map(item => item.right)),
-        top: Math.min(...rects.map(item => item.top)),
-        bottom: Math.max(...rects.map(item => item.bottom)),
-      }
-    : visualTarget.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2 - bounds.left, y: rect.top + rect.height / 2 - bounds.top };
-}
+import CardMotionLayer from './CardMotionLayer.jsx';
 
 export default function TableSurface({
   room, playerId, tableRef, selectedIds = [], selectedPileIds = [], preview, previewCard, previewCount = 1, dragCount = 1, pileDrag, selectionBox,
@@ -32,7 +10,7 @@ export default function TableSurface({
   onOpenContextMenu, dragCardId, dragPosition, dragOverHand, contextCardId, cue,
   onConfirmPlacement, onCancelPlacement, pendingPlacement, dragGhostRef, onSurfacePointerDown, onSurfacePointerMove, onSurfacePointerUp, onSurfacePointerCancel, draggedCardIds = [],
 }) {
-  const [drawFlight,setDrawFlight]=useState(null),[moveFlight,setMoveFlight]=useState(null),[turnClock,setTurnClock]=useState(Date.now()),[lastTouched,setLastTouched]=useState(null);
+  const [turnClock,setTurnClock]=useState(Date.now()),[lastTouched,setLastTouched]=useState(null);
   useEffect(()=>{
     if(!cue?.id||['chat','chat:react','turn:start','turn:next'].includes(cue.type))return;
     const cardIds=new Set([...(cue.cardIds||[]),...(cue.cardId?[cue.cardId]:[])]);
@@ -54,48 +32,6 @@ export default function TableSurface({
     observer.observe(surface);
     return()=>observer.disconnect();
   },[tableRef]);
-  useEffect(()=>{
-    if(!['draw','deal'].includes(cue?.type)||cue.playerId===playerId){setDrawFlight(null);return;}
-    setDrawFlight(null);
-    let frame=requestAnimationFrame(()=>{
-      const surface=tableRef.current,deck=surface?.querySelector('[data-place-id="deck"]'),hand=surface?.querySelector('.table-hand-zone'),recipientSeat=surface?.querySelector(`[data-player-id="${cue.playerId}"]`);
-      if(!surface||!deck)return;
-      const dealt=cue.type==='draw'?(cue.drawCount||1):(cue.drawCounts?.[playerId]||0);
-      const destination=cue.type==='draw'?recipientSeat:(cue.recipientIds?.includes(playerId)?hand:null);
-      if(!destination)return;
-      if(dealt<1)return;
-      const start=objectCenter(surface,deck),end=objectCenter(surface,destination);
-      if(!start||!end)return;
-      setDrawFlight({id:cue.id,x:start.x-28.5,y:start.y-40,dx:end.x-start.x,dy:end.y-start.y,count:Math.min(3,dealt)});
-    });
-    return()=>cancelAnimationFrame(frame);
-  },[cue?.id,playerId,tableRef]);
-  useEffect(()=>{
-    const moving=['move','move-card','move-cards','move-stack','selection:move','place','place-cards','return-card','return-stack','discard:to-deck','discard:to-hand','pile:absorb-to-discard'].includes(cue?.type);
-    if(!moving||cue.playerId===playerId){setMoveFlight(null);return;}
-    let frame=requestAnimationFrame(()=>{
-      const surface=tableRef.current;if(!surface)return;
-      const bounds=surface.getBoundingClientRect();
-      const center=(element)=>objectCenter(surface,element);
-      const elementForId=(id)=>{
-        if(!id)return null;
-        if(id.startsWith('hand-'))return id===`hand-${playerId}`?surface.querySelector('.table-hand-zone'):surface.querySelector(`[data-player-id="${CSS.escape(id.slice(5))}"]`);
-        return surface.querySelector(`[data-place-id="${CSS.escape(id)}"]`);
-      };
-      const sourceCenters=(cue.fromIds||[cue.pileId]).map(elementForId).map(center).filter(Boolean);
-      const start=sourceCenters.length?sourceCenters.reduce((sum,point)=>({x:sum.x+point.x/sourceCenters.length,y:sum.y+point.y/sourceCenters.length}),{x:0,y:0}):center(surface.querySelector('[data-place-id="deck"]'))||{x:bounds.width/2,y:bounds.height/2};
-      const destinationId=cue.toId||cue.targetId;
-      const destinationEl=elementForId(destinationId);
-      const targetPosition=cue.targetPosition;
-      const radians=viewAngle*Math.PI/180;
-      const viewX=targetPosition?50+(targetPosition.x-50)*Math.cos(radians)-(targetPosition.y-50)*Math.sin(radians):null;
-      const viewY=targetPosition?50+(targetPosition.x-50)*Math.sin(radians)+(targetPosition.y-50)*Math.cos(radians):null;
-      const end=center(destinationEl)||(targetPosition?{x:viewX/100*bounds.width,y:viewY/100*bounds.height}:null)||center(surface.querySelector('.table-hand-zone'))||{x:bounds.width/2,y:bounds.height/2};
-      setMoveFlight({id:cue.id,start:{x:start.x-28.5,y:start.y-40},end:{x:end.x-28.5,y:end.y-40},count:Math.max(1,Math.min(5,cue.cardIds?.length||1))});
-    });
-    const timer=setTimeout(()=>setMoveFlight(null),760);
-    return()=>{cancelAnimationFrame(frame);clearTimeout(timer);};
-  },[cue?.id,tableRef]);
   const activePlayers = room.players.filter(player=>player.online || player.id===playerId);
   const opponents = activePlayers.filter((player)=>player.id!==playerId);
   const self = room.players.find((player)=>player.id===playerId);
@@ -119,7 +55,13 @@ export default function TableSurface({
   });
   const cueClass = cue?.playerId===playerId?'':cue?.type==='deal'?'draw':cue?.type?.replaceAll(':','-');
   const turnRemaining=room?.turn?.deadlineAt?Math.max(0,Math.ceil((room.turn.deadlineAt-turnClock)/1000)):null;
-  return <div className="table-wrap">{room.turn?.enabled&&<div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}><span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`:'Time expired'}</small>}</span></div>}<div className={`table-surface ${cue?.playerId===playerId?'local-action':''}`} ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
+  const motionInteractionKey=`${pileDrag?.pileId||''}:${pileDrag?.x||''}:${pileDrag?.y||''}|${surfaceSize.width}x${surfaceSize.height}`;
+  const turnIndicator = room.turn?.enabled ? (
+    <div className={`turn-indicator table-turn-indicator ${room.turn.currentPlayerId===playerId?'your-turn':''}`}>
+      <span className="turn-dot"/><span><b>{room.turn.currentPlayerId===playerId?'Your turn':`${room.turn.currentPlayerName||'Player'}’s turn`}</b>{turnRemaining!==null&&<small>{turnRemaining>0?`${turnRemaining}s remaining`: 'Time expired'}</small>}</span>
+    </div>
+  ) : null;
+  return <div className="table-wrap">{turnIndicator}<div className={`table-surface ${cue?.playerId===playerId?'local-action':''}`} ref={tableRef} onClick={onSurfaceClick} onPointerDown={onSurfacePointerDown} onPointerMove={onSurfacePointerMove} onPointerUp={onSurfacePointerUp} onPointerCancel={onSurfacePointerCancel}>
     <div className="table-seam"/>
     {(dragCardId||pileDrag?.pileId)&&<div className="placement-boundary" aria-hidden="true"/>}
     {seats.map(({player,x,y})=><div data-player-id={player.id} className={`seat ${cue?.playerId!==playerId&&(cue?.playerId===player.id||cue?.recipientIds?.includes(player.id))?'seat-action':''}`} key={player.id} style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-50%)'}}>
@@ -178,8 +120,7 @@ export default function TableSurface({
     {selectionBox&&<div className="selection-box" style={{left:selectionBox.x,top:selectionBox.y,width:selectionBox.width,height:selectionBox.height}} aria-hidden="true"/>}
     {preview&&<>{preview.mode!=='insert'&&<div className={`placement-preview preview-${preview.mode}`} aria-hidden="true" style={previewPosition?{left:`${previewPosition.x}px`,top:`${previewPosition.y}px`}:{left:`${preview.viewX??preview.x}%`,top:`${preview.viewY??preview.y}%`}}><span className={previewCard?.color==='red'?'red-card':''}>{previewCard?.rank&&previewCard.faceUp?`${previewCard.rank}${previewCard.suit}`:'♧'}</span>{preview.mode==='fan-stack'&&<small className="preview-mode-label">Layer fan</small>}{previewCount>1&&<b className="preview-count">{previewCount}</b>}</div>}{preview.mode==='insert'&&<><i className="fan-insertion-marker" style={{left:`${preview.previewX??preview.x}%`,top:`${preview.previewY??preview.y}%`,transform:`translate(-50%,-50%) rotate(${viewAngle}deg)`}}/><div className={`fan-insertion-card ${previewCount>1?'is-group':''}`} style={{left:`${preview.previewX??preview.x}%`,top:`${preview.previewY??preview.y}%`,'--view-angle':`${viewAngle}deg`}}><Card card={previewCard||{faceUp:false}} index={0}/>{previewCount>1&&<b className="fan-insertion-count">{previewCount} cards</b>}</div></>}</>}
     {dragCardId&&dragPosition&&<div ref={dragGhostRef} className={`drag-ghost ${dragCount>1?'is-group':''}`} aria-hidden="true" style={{left:dragPosition.x,top:dragPosition.y}}><Card card={dragPosition.card} index={0}/>{dragCount>1&&<b className="drag-count">{dragCount}</b>}</div>}
-    {drawFlight&&Array.from({length:drawFlight.count},(_,index)=><div key={`${drawFlight.id}-${index}`} className="draw-flight" style={{'--draw-x':`${drawFlight.x+index*3}px`,'--draw-y':`${drawFlight.y-index*2}px`,'--draw-dx':`${drawFlight.dx}px`,'--draw-dy':`${drawFlight.dy}px`,'--draw-delay':`${index*45}ms`}}><div>♧</div></div>)}
-    {moveFlight&&Array.from({length:moveFlight.count},(_,index)=><div key={`${moveFlight.id}-${index}`} className="move-flight" style={{'--move-x':`${moveFlight.start.x+index*3}px`,'--move-y':`${moveFlight.start.y-index*2}px`,'--move-dx':`${moveFlight.end.x-moveFlight.start.x}px`,'--move-dy':`${moveFlight.end.y-moveFlight.start.y}px`,'--move-delay':`${index*35}ms`}}><div>♧</div></div>)}
+    <CardMotionLayer surfaceRef={tableRef} cue={cue} playerId={playerId} viewAngle={viewAngle} layoutKey={room.piles} interactionKey={motionInteractionKey}/>
     <div className="table-label label-bottom">A LITTLE LUCK <span>✦</span> A LOT OF LAUGHTER</div>
   </div></div>;
 }
