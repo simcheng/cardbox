@@ -25,7 +25,7 @@ export default function InviteDialog({ open, room, onClose, onToast }) {
   }
   async function share() {
     if (!navigator.share) return copy();
-    try { await navigator.share({ title: `Join ${room.name}`, text: `Join my Cardtable room with code ${room.id}`, url }); }
+    try { await navigator.share({ title: `Join ${room.name}`, text: `Join my Cardbox room with code ${room.id}`, url }); }
     catch (error) { if (error?.name !== 'AbortError') onToast('Could not open the share menu'); }
   }
   return <div className="modal-shade invite-shade" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>

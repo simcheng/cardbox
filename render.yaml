@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: cardtable
+    name: cardbox
     runtime: node
     plan: starter
     buildCommand: npm install && npm run build

@@ -235,4 +235,4 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => detachSocket(socket));
 });
 
-httpServer.listen(PORT, '0.0.0.0', () => console.log(`Cardtable listening on ${PORT}`));
+httpServer.listen(PORT, '0.0.0.0', () => console.log(`Cardbox listening on ${PORT}`));

@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function LedgerDialog({ open, entries = [], roomName = 'cardtable', onClose }) {
+export default function LedgerDialog({ open, entries = [], roomName = 'cardbox', onClose }) {
   const exportHistory = () => {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -11,7 +11,7 @@ export default function LedgerDialog({ open, entries = [], roomName = 'cardtable
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const safeName = String(roomName || 'cardtable').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'cardtable';
+    const safeName = String(roomName || 'cardbox').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'cardbox';
     link.href = url;
     link.download = `${safeName}-action-history-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);

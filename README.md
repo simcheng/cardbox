@@ -1,6 +1,6 @@
-# Cardtable
+# Cardbox
 
-Cardtable is a live, freeform card table for desktop and mobile browsers. It starts with a standard 52-card deck, private hands, guest names, table chat, and invite links. Deck definitions are data-driven in `shared/deckDefinitions.js` so new decks can be added without tying their rules to the table UI.
+Cardbox is a live, freeform card table for desktop and mobile browsers. It starts with a standard 52-card deck, private hands, guest names, table chat, and invite links. Deck definitions are data-driven in `shared/deckDefinitions.js` so new decks can be added without tying their rules to the table UI.
 
 ## Run locally
 
@@ -43,7 +43,7 @@ On touch devices, drag cards to move them, tap to select, and hold a card to ope
 The repository includes a Render Blueprint in `render.yaml`.
 
 1. In Render, choose **New → Blueprint** and connect `https://github.com/simcheng/cardbox` (or select the connected repository).
-2. Review the Blueprint before applying it. It creates one Node web service named `cardtable`, runs `npm install && npm run build`, starts with `npm start`, and uses `/health` for its health check. The Blueprint currently selects Render's `starter` plan; change the plan in `render.yaml` if you want a different size or billing tier.
+2. Review the Blueprint before applying it. It creates one Node web service named `cardbox`, runs `npm install && npm run build`, starts with `npm start`, and uses `/health` for its health check. The Blueprint currently selects Render's `starter` plan; change the plan in `render.yaml` if you want a different size or billing tier.
 3. Wait for the first deploy, then check `https://<your-service>.onrender.com/health` for `{"ok":true}`. Open the service URL and create a table to confirm the UI and Socket.IO connection work.
 4. Keep one service instance for this prototype. Lobby and chat data live in process memory; a restart or deploy clears active tables. Multiple instances need shared room storage and a Socket.IO adapter before they can serve the same tables. Render can interrupt WebSocket sessions during deploys or maintenance; clients reconnect, but in-memory tables do not survive an instance replacement.
 
