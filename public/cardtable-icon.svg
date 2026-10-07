@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="16" fill="#103d2e"/>
+  <rect x="15" y="11" width="31" height="42" rx="5" transform="rotate(-12 15 11)" fill="#f6f1dd"/>
+  <text x="21" y="30" fill="#bd514c" font-family="Arial,sans-serif" font-size="12" font-weight="700">A</text>
+  <text x="29" y="44" fill="#bd514c" font-family="Georgia,serif" font-size="21">♥</text>
+  <path d="M42 30c-4-7-12-1-10 5 2 6 10 10 10 10s8-4 10-10c2-6-6-12-10-5z" fill="#f1dd9d" stroke="#103d2e" stroke-width="2"/>
+</svg>
