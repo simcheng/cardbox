@@ -165,11 +165,15 @@ function App() {
     sessionStorage.setItem('cardtable:name', name.trim());
     history.replaceState({}, '', `${location.pathname}?room=${r.roomId}`); setError('');
   }
+  function handleCreateResult(r) {
+    if (!r?.ok) return setError(r?.error || 'Unable to create that table.');
+    applyRoom(r);
+  }
   function returnToStart() { activeRoomIdRef.current=''; history.replaceState({}, '', location.pathname); setRoom(null); setPlayerId(''); setInviteJoin(false); setRoomCode(''); setError(''); }
   function handleJoinResult(r) { joinInFlightRef.current=false; if(r?.ok) return applyRoom(r); if(/closed|does not exist/i.test(r?.error||'')) return returnToStart(); setError(r?.error||'Unable to join that table.'); }
   function create() {
     if (!name.trim()) return setError('Add a name to join the table.');
-    socket.emit('room:create', { name: roomName, playerName: name.trim(), settings: { privateHands: true, hostControls: false, deckId } }, applyRoom);
+    socket.emit('room:create', { name: roomName, playerName: name.trim(), settings: { privateHands: true, hostControls: false, deckId } }, handleCreateResult);
   }
   function join() {
     if (!name.trim()) return setError('Add a name to join the table.');
