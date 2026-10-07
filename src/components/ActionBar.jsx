@@ -72,7 +72,7 @@ export default function ActionBar({ deckCount, canUndo, canPlay, isHost, selecte
       <div className="deck-status"><span className="mini-deck">♧</span><div><b>{deckCount}</b><small>in deck</small></div></div>
       {canPlay&&<div className="tool-dropdown deck-actions-dropdown">
           <button ref={moreRef} className="deck-menu-toggle" aria-expanded={open} aria-label="Deck actions" title="Deck actions" onClick={toggleMore}>•••</button>
-          {open&&createPortal(<div ref={menuRef} style={{...menuPosition,'--menu-max-height':`${menuMaxHeight}px`}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'} ${opensLeft?'opens-left':'opens-right'}`}>
+          {open&&createPortal(<div ref={menuRef} style={{...menuPosition,'--menu-max-height':`${menuMaxHeight}px`,boxSizing:'border-box',minHeight:0,overflowX:'hidden',overflowY:'auto',overscrollBehavior:'contain'}} className={`popover extra-menu ${opensUp?'opens-up':'opens-down'} ${opensLeft?'opens-left':'opens-right'}`}>
             <b>Deck actions</b>
             {canPlay&&<>
               <button disabled={!deckCount} onClick={()=>{onAction('shuffle',{pileId:'deck'});setOpen(false)}}>↻ Shuffle deck</button>
