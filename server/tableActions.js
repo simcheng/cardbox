@@ -53,6 +53,102 @@ function takeCards(room, playerId, selections) {
   return { cards:cards.map(item=>item.card), sources:[...new Set(cards.map(item=>item.from))] };
 }
 
+function applyRoomAction(room, playerId, payload, { isHost, isModerator }) {
+  const { type } = payload;
+  if (type === 'turn:start' || type === 'turn:stop' || type === 'turn:next') {
+    room.turn ||= { enabled:false,currentPlayerId:null };
+    if ((type === 'turn:start' || type === 'turn:stop') && !isModerator) return reject('Only the host or a cohost can change turn order.');
+    if (type === 'turn:stop') {
+      room.turn = { enabled:false,currentPlayerId:null };
+      return { ok:true };
+    }
+    const players = [...room.players.values()].filter(player => player.online);
+    if (!players.length) return reject('There are no online players for turn order.');
+    if (type === 'turn:start') {
+      const seconds = Math.max(0,Math.min(3600,Number(payload.timerSeconds)||0));
+      room.turn = {
+        enabled:true,
+        currentPlayerId:room.turn.enabled&&players.some(player=>player.id===room.turn.currentPlayerId)?room.turn.currentPlayerId:players[0].id,
+        timerSeconds:seconds,
+        deadlineAt:seconds?Date.now()+seconds*1000:null,
+      };
+      return { ok:true };
+    }
+    if (!room.turn.enabled) return reject('Turn order is not active.');
+    if (room.turn.currentPlayerId !== playerId && !isModerator) return reject('Only the current player can advance the turn.');
+    const index = Math.max(0,players.findIndex(player=>player.id===room.turn.currentPlayerId));
+    room.turn.currentPlayerId = players[(index+1)%players.length].id;
+    room.turn.deadlineAt = room.turn.timerSeconds?Date.now()+room.turn.timerSeconds*1000:null;
+    return { ok:true };
+  }
+  if (type === 'player:kick') {
+    if (!isModerator) return reject('Only the host or a cohost can kick players.');
+    const target = room.players.get(payload.targetId);
+    if (!target || target.id===room.hostId || target.id===playerId) return reject('Choose a non-host player to kick.');
+    const hand = room.piles.find(pile=>pile.kind==='hand'&&pile.ownerId===target.id),discard = findPile(room,'discard');
+    if (hand&&discard) {
+      for (const card of hand.cards) { card.ownerId=null; card.faceUp=true; }
+      discard.cards.push(...hand.cards);
+      room.piles.splice(room.piles.indexOf(hand),1);
+    }
+    room.cohostIds.delete(target.id);
+    room.players.delete(target.id);
+    if (room.turn?.currentPlayerId===target.id) room.turn.currentPlayerId=[...room.players.values()].find(player=>player.online)?.id||null;
+    return { ok:true,kickedPlayerId:target.id };
+  }
+  if (type === 'host:assign') {
+    if (!isHost) return reject('Only the primary host can assign host roles.');
+    const target = room.players.get(payload.targetId);
+    if (!target) return reject('Choose a player at this table.');
+    if (!target.online) return reject('That player must be online to change host roles.');
+    if (payload.role==='cohost') {
+      if (target.id===room.hostId) return reject('The primary host cannot be a cohost.');
+      if (room.cohostIds.has(target.id)) room.cohostIds.delete(target.id); else room.cohostIds.add(target.id);
+    } else if (payload.role==='host') {
+      if (target.id===room.hostId) return reject('That player is already the host.');
+      room.cohostIds.add(room.hostId);
+      room.cohostIds.delete(target.id);
+      room.hostId=target.id;
+    } else return reject('Choose a valid host role.');
+    return { ok:true };
+  }
+  if (type === 'settings') {
+    if (!isModerator) return reject('Only the host or a cohost can change table settings.');
+    room.settings = { ...room.settings, ...payload.settings };
+    return { ok:true };
+  }
+  if (type === 'profile') {
+    const player = room.players.get(playerId);
+    const palette = ['#e0ad74','#84b6a0','#ce8d91','#9a9dde','#d6c66f','#80a8cf','#c48e59','#7697a8'];
+    const animals = ['🐱','🐶','🐻','🐼','🦊','🐸','🐵','🐧','🦉','🐰'];
+    if (payload.emoji && !animals.includes(payload.emoji)) return reject('Choose one of the available animal avatars.');
+    if (payload.color && !palette.includes(payload.color)) return reject('Choose one of the available profile colors.');
+    if (payload.emoji) player.emoji=payload.emoji;
+    if (payload.color) player.color=payload.color;
+    return { ok:true };
+  }
+  if (type === 'chat') {
+    const message = String(payload.message||'').trim().slice(0,400);
+    if (!message) return reject();
+    const player = room.players.get(playerId);
+    room.chat.push({ id:`${Date.now()}-${Math.random()}`,playerId,name:player.name,color:player.color,message,time:Date.now(),reactions:{} });
+    if (room.chat.length>300) room.chat.splice(0,room.chat.length-300);
+    return { ok:true };
+  }
+  if (type === 'chat:react') {
+    const message = room.chat.find(item=>item.id===payload.messageId);
+    const emoji = isEmojiReaction(payload.emoji)?payload.emoji:null;
+    if (!message || !emoji) return reject('Choose a message and a reaction.');
+    message.reactions ||= {};
+    const players = message.reactions[emoji] ||= [];
+    const existing = players.indexOf(playerId);
+    if (existing>=0) players.splice(existing,1); else players.push(playerId);
+    if (!players.length) delete message.reactions[emoji];
+    return { ok:true };
+  }
+  return null;
+}
+
 export function applyTableAction(room, playerId, payload = {}) {
   if (!room?.players.has(playerId)) return reject('Join a table first.');
   const { type } = payload;
@@ -71,6 +167,8 @@ export function applyTableAction(room, playerId, payload = {}) {
     return { ok: true };
   }
   if (type === 'reset-board' && !isModerator) return reject('Only the host or a cohost can reset the board.');
+  const roomAction = applyRoomAction(room,playerId,payload,{ isHost,isModerator });
+  if (roomAction) return roomAction;
   const undoState = ['chat', 'chat:react', 'profile', 'settings', 'host:assign', 'player:kick', 'turn:start', 'turn:next', 'turn:stop'].includes(type) ? null : { piles: structuredClone(room.piles) };
 
   if (type === 'shuffle') {
@@ -360,68 +458,6 @@ export function applyTableAction(room, playerId, payload = {}) {
     const pile = findPile(room, payload.pileId);
     if (!pile || pile.kind === 'hand' || !Number.isFinite(Number(payload.x)) || !Number.isFinite(Number(payload.y))) return reject('Choose a movable pile and a table position.');
     pile.x = Math.min(94, Math.max(6, Number(payload.x))); pile.y = Math.min(78, Math.max(18, Number(payload.y)));
-  } else if (type === 'turn:start' || type === 'turn:stop' || type === 'turn:next') {
-    room.turn ||= {enabled:false,currentPlayerId:null};
-    if(type==='turn:start'||type==='turn:stop'){if(!isModerator)return reject('Only the host or a cohost can change turn order.');}
-    if(type==='turn:stop'){room.turn={enabled:false,currentPlayerId:null};}
-    else {
-      const players=[...room.players.values()].filter(player=>player.online);
-      if(!players.length)return reject('There are no online players for turn order.');
-      if(type==='turn:start'){const seconds=Math.max(0,Math.min(3600,Number(payload.timerSeconds)||0));room.turn={enabled:true,currentPlayerId:room.turn.enabled&&players.some(player=>player.id===room.turn.currentPlayerId)?room.turn.currentPlayerId:players[0].id,timerSeconds:seconds,deadlineAt:seconds?Date.now()+seconds*1000:null};}
-      else {
-        if(!room.turn.enabled)return reject('Turn order is not active.');
-        if(room.turn.currentPlayerId!==playerId&&!isModerator)return reject('Only the current player can advance the turn.');
-        const index=Math.max(0,players.findIndex(player=>player.id===room.turn.currentPlayerId));
-        room.turn.currentPlayerId=players[(index+1)%players.length].id;
-        room.turn.deadlineAt=room.turn.timerSeconds?Date.now()+room.turn.timerSeconds*1000:null;
-      }
-    }
-  } else if (type === 'player:kick') {
-    if (!isModerator) return reject('Only the host or a cohost can kick players.');
-    const target=room.players.get(payload.targetId);
-    if (!target || target.id===room.hostId || target.id===playerId) return reject('Choose a non-host player to kick.');
-    const hand=room.piles.find(pile=>pile.kind==='hand'&&pile.ownerId===target.id),discard=findPile(room,'discard');
-    if(hand&&discard){for(const card of hand.cards){card.ownerId=null;card.faceUp=true;}discard.cards.push(...hand.cards);room.piles.splice(room.piles.indexOf(hand),1);}
-    room.cohostIds.delete(target.id);room.players.delete(target.id);if(room.turn?.currentPlayerId===target.id)room.turn.currentPlayerId=[...room.players.values()].find(player=>player.online)?.id||null;return {ok:true,kickedPlayerId:target.id};
-  } else if (type === 'host:assign') {
-    if (!isHost) return reject('Only the primary host can assign host roles.');
-    const target=room.players.get(payload.targetId);
-    if(!target)return reject('Choose a player at this table.');
-    if(!target.online)return reject('That player must be online to change host roles.');
-    if(payload.role==='cohost'){
-      if(target.id===room.hostId)return reject('The primary host cannot be a cohost.');
-      if(room.cohostIds.has(target.id))room.cohostIds.delete(target.id);else room.cohostIds.add(target.id);
-    }else if(payload.role==='host'){
-      if(target.id===room.hostId)return reject('That player is already the host.');
-      room.cohostIds.add(room.hostId);
-      room.cohostIds.delete(target.id);
-      room.hostId=target.id;
-    }else return reject('Choose a valid host role.');
-  } else if (type === 'settings') {
-    if (!isModerator) return reject('Only the host or a cohost can change table settings.');
-    room.settings = { ...room.settings, ...payload.settings };
-  } else if (type === 'profile') {
-    const player = room.players.get(playerId);
-    const palette = ['#e0ad74','#84b6a0','#ce8d91','#9a9dde','#d6c66f','#80a8cf','#c48e59','#7697a8'];
-    const animals = ['🐱','🐶','🐻','🐼','🦊','🐸','🐵','🐧','🦉','🐰'];
-    if (payload.emoji && !animals.includes(payload.emoji)) return reject('Choose one of the available animal avatars.');
-    if (payload.color && !palette.includes(payload.color)) return reject('Choose one of the available profile colors.');
-    if (payload.emoji) player.emoji = payload.emoji;
-    if (payload.color) player.color = payload.color;
-  } else if (type === 'chat') {
-    const message = String(payload.message || '').trim().slice(0, 400); if (!message) return reject();
-    const player = room.players.get(playerId);
-    room.chat.push({ id: `${Date.now()}-${Math.random()}`, playerId, name: player.name, color: player.color, message, time: Date.now(), reactions: {} });
-    if(room.chat.length>300)room.chat.splice(0,room.chat.length-300);
-  } else if (type === 'chat:react') {
-    const message = room.chat.find((item) => item.id === payload.messageId);
-    const emoji = isEmojiReaction(payload.emoji) ? payload.emoji : null;
-    if (!message || !emoji) return reject('Choose a message and a reaction.');
-    message.reactions ||= {};
-    const players = message.reactions[emoji] ||= [];
-    const existing = players.indexOf(playerId);
-    if (existing >= 0) players.splice(existing, 1); else players.push(playerId);
-    if (!players.length) delete message.reactions[emoji];
   } else return reject('Unknown table action.');
 
   if (undoState) { room.undoStack ||= []; room.undoStack.push(undoState); if (room.undoStack.length > 30) room.undoStack.shift(); }
